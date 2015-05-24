@@ -13,6 +13,8 @@ pub enum Yaml {
     Array(self::Array),
     Hash(self::Hash),
     Null,
+    /// Access non-exist node by Index trait will return BadValue.
+    /// This simplifies error handling of user.
     BadValue,
 }
 
@@ -88,7 +90,6 @@ impl Yaml {
             _ => false
         }
     }
-
 
     pub fn as_f64(&self) -> Option<f64> {
         // XXX(chenyh) precompile me

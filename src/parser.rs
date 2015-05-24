@@ -37,7 +37,7 @@ pub enum Event {
     DocumentStart,
     DocumentEnd,
     Alias,
-    Scalar(String),
+    Scalar(String, TScalarStyle),
     SequenceStart,
     SequenceEnd,
     MappingStart,
@@ -46,7 +46,7 @@ pub enum Event {
 
 impl Event {
     fn empty_scalar() -> Event {
-        Event::Scalar(String::new())
+        Event::Scalar(String::new(), TScalarStyle::Plain)
     }
 }
 
@@ -130,9 +130,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
     fn load_node(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         match *first_ev {
-            Event::Scalar(ref v) => {
+            Event::Scalar(ref v, _) => {
                 // TODO scalar
-                println!("Scalar: {:?}", first_ev);
                 Ok(Yaml::String(v.clone()))
             },
             Event::SequenceStart => {
@@ -294,10 +293,10 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.state = State::IndentlessSequenceEntry;
                 Ok(Event::SequenceStart)
             },
-            TokenType::ScalarToken(_, v) => {
+            TokenType::ScalarToken(style, v) => {
                 self.pop_state();
                 self.skip();
-                Ok(Event::Scalar(v))
+                Ok(Event::Scalar(v, style))
             },
             TokenType::FlowSequenceStartToken => {
                 self.state = State::FlowSequenceFirstEntry;
@@ -472,12 +471,14 @@ a0 bb: val
 a1:
     b1: 4
     b2: d
-a2: 4
+a2: 4 # i'm comment
 a3: [1, 2, 3]
 a4:
     - - a1
       - a2
     - 2
+a5: 'single_quoted'
+a5: \"double_quoted\"
 ".to_string();
         let mut parser = Parser::new(s.chars());
         let out = parser.load().unwrap();
