@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use yaml::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TEncoding {
@@ -149,7 +148,7 @@ pub type ScanResult = Result<(), ScanError>;
 impl<T: Iterator<Item=char>> Scanner<T> {
     /// Creates the YAML tokenizer.
     pub fn new(rdr: T) -> Scanner<T> {
-        let mut p = Scanner {
+        Scanner {
             rdr: rdr,
             buffer: VecDeque::new(),
             mark: Marker::new(0, 1, 0),
@@ -164,15 +163,14 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             flow_level: 0,
             tokens_parsed: 0,
             token_available: false,
-        };
-        return p;
+        }
     }
 
     fn lookhead(&mut self, count: usize) {
         if self.buffer.len() >= count {
             return;
         }
-        for i in 0..(count - self.buffer.len()) {
+        for _ in 0..(count - self.buffer.len()) {
             self.buffer.push_back(self.rdr.next().unwrap_or('\0'));
         }
     }
@@ -193,6 +191,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     fn ch_is(&self, c: char) -> bool {
         self.buffer[0] == c
     }
+    #[allow(dead_code)]
     fn eof(&self) -> bool {
         self.ch_is('\0')
     }
@@ -250,7 +249,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.lookhead(4);
 
         if is_z(self.ch()) {
-            self.fetch_stream_end();
+            try!(self.fetch_stream_end());
             return Ok(());
         }
 
@@ -325,7 +324,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     }
 
     pub fn fetch_more_tokens(&mut self) -> ScanResult {
-        let mut need_more = false;
+        let mut need_more;
         loop {
             need_more = false;
             if self.tokens.is_empty() {
@@ -469,7 +468,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             // - * only allowed in block
             unreachable!();
         }
-        self.remove_simple_key();
+        try!(self.remove_simple_key());
         self.allow_simple_key();
 
         let start_mark = self.mark;
@@ -719,7 +718,7 @@ a4:
 ".to_string();
         let p = Scanner::new(s.chars());
         for t in p {
-            //println!("{:?}", t);
+            // println!("{:?}", t);
         }
     }
 }

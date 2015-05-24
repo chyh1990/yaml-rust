@@ -85,7 +85,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
     fn skip(&mut self) {
         self.token = None;
-        self.peek();
+        //self.peek();
     }
     fn pop_state(&mut self) {
         self.state = self.states.pop().unwrap()
@@ -117,7 +117,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         if ev == Event::StreamEnd {
             return Ok(());
         }
-        self.load_document(&ev);
+        try!(self.load_document(&ev));
         Ok(())
     }
 
@@ -125,7 +125,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         assert_eq!(first_ev, &Event::DocumentStart);
 
         let ev = try!(self.parse());
-        let ev = try!(self.load_node(&ev));
+        try!(self.load_node(&ev));
 
         Ok(())
     }
@@ -251,7 +251,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     }
 
     fn _explict_document_start(&mut self) -> ParseResult {
-        let mut tok = try!(self.peek());
+        let tok = try!(self.peek());
         if tok.1 != TokenType::DocumentStartToken {
             return Err(ScanError::new(tok.0, "did not find expected <document start>"));
         }
@@ -280,7 +280,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     }
 
     fn parse_node(&mut self, block: bool, indentless_sequence: bool) -> ParseResult {
-        let mut tok = try!(self.peek());
+        let tok = try!(self.peek());
         match tok.1 {
             TokenType::AliasToken => unimplemented!(),
             TokenType::AnchorToken => unimplemented!(),
@@ -316,7 +316,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn block_mapping_key(&mut self, first: bool) -> ParseResult {
         // skip BlockMappingStartToken
         if first {
-            let tok = try!(self.peek());
+            let _ = try!(self.peek());
             //self.marks.push(tok.0);
             self.skip();
         }
@@ -379,7 +379,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn flow_sequence_entry(&mut self, first: bool) -> ParseResult {
         // skip FlowMappingStartToken
         if first {
-            let tok = try!(self.peek());
+            let _ = try!(self.peek());
             //self.marks.push(tok.0);
             self.skip();
         }
@@ -421,7 +421,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn block_sequence_entry(&mut self, first: bool) -> ParseResult {
         // BLOCK-SEQUENCE-START
         if first {
-            let tok = try!(self.peek());
+            let _ = try!(self.peek());
             //self.marks.push(tok.0);
             self.skip();
         }
