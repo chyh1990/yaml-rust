@@ -2,6 +2,3 @@
 name = "yaml-rust"
 version = "0.1.0"
 authors = ["Yuheng Chen <yuhengchen@sensetime.com>"]
-
-[dependencies]
-regex = "*"

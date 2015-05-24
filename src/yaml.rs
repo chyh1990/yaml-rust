@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
-use regex::Regex;
+use std::str::FromStr;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
 pub enum Yaml {
@@ -65,10 +65,6 @@ pub fn $name(&self) -> Option<$t> {
     );
 );
 
-// these regex are from libyaml-rust project
-macro_rules! regex(
-    ($s:expr) => (Regex::new($s).unwrap());
-);
 impl Yaml {
     define_as!(as_i64, i64, I64);
     define_as!(as_bool, bool, Boolean);
@@ -91,12 +87,11 @@ impl Yaml {
         }
     }
 
-    pub fn as_f64(&self) -> Option<f64> {
+    pub fn parse<T: FromStr>(&self) -> Option<T> {
         // XXX(chenyh) precompile me
-        let float_pattern = regex!(r"^([-+]?)(\.[0-9]+|[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?)$");
         match *self {
-            Yaml::String(ref v) if float_pattern.is_match(v) => {
-                v.parse::<f64>().ok()
+            Yaml::String(ref v) => {
+                v.parse::<T>().ok()
             },
             _ => None
         }
@@ -146,7 +141,7 @@ c: [1, 2]
         let mut parser = Parser::new(s.chars());
         let out = parser.load().unwrap();
         assert_eq!(out["a"].as_str().unwrap(), "1");
-        assert_eq!(out["c"][1].as_str().unwrap(), "2");
+        assert_eq!(out["c"][1].parse::<i32>().unwrap(), 2);
         assert!(out["d"][0].is_badvalue());
         //assert_eq!(out.as_hash().unwrap()[&Yaml::String("a".to_string())].as_i64().unwrap(), 1i64);
     }
