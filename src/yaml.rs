@@ -1,4 +1,5 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::BTreeMap;
+use std::ops::Index;
 use std::string;
 use regex::Regex;
 
@@ -12,6 +13,7 @@ pub enum Yaml {
     Array(self::Array),
     Hash(self::Hash),
     Null,
+    BadValue,
 }
 
 pub type Array = Vec<Yaml>;
@@ -80,6 +82,14 @@ impl Yaml {
         }
     }
 
+    pub fn is_badvalue(&self) -> bool {
+        match *self {
+            Yaml::BadValue => true,
+            _ => false
+        }
+    }
+
+
     pub fn as_f64(&self) -> Option<f64> {
         // XXX(chenyh) precompile me
         let float_pattern = regex!(r"^([-+]?)(\.[0-9]+|[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?)$");
@@ -90,13 +100,42 @@ impl Yaml {
             _ => None
         }
     }
+
+    pub fn from_str(s: &str) -> Yaml {
+        Yaml::String(s.to_string())
+    }
 }
+
+static BAD_VALUE: Yaml = Yaml::BadValue;
+impl<'a> Index<&'a str> for Yaml {
+    type Output = Yaml;
+
+    fn index(&self, idx: &'a str) -> &Yaml {
+        let key = Yaml::String(idx.to_string());
+        match self.as_hash() {
+            Some(h) => h.get(&key).unwrap_or(&BAD_VALUE),
+            None => &BAD_VALUE
+        }
+    }
+}
+
+impl Index<usize> for Yaml {
+    type Output = Yaml;
+
+    fn index(&self, idx: usize) -> &Yaml {
+        match self.as_vec() {
+            Some(v) => v.get(idx).unwrap_or(&BAD_VALUE),
+            None => &BAD_VALUE
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod test {
     use parser::Parser;
     use yaml::Yaml;
-    // #[test]
+    #[test]
     fn test_coerce() {
         let s = "---
 a: 1
@@ -105,6 +144,9 @@ c: [1, 2]
 ";
         let mut parser = Parser::new(s.chars());
         let out = parser.load().unwrap();
+        assert_eq!(out["a"].as_str().unwrap(), "1");
+        assert_eq!(out["c"][1].as_str().unwrap(), "2");
+        assert!(out["d"][0].is_badvalue());
         //assert_eq!(out.as_hash().unwrap()[&Yaml::String("a".to_string())].as_i64().unwrap(), 1i64);
     }
 }
