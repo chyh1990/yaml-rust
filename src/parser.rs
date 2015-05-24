@@ -43,6 +43,12 @@ pub enum Event {
     MappingEnd
 }
 
+impl Event {
+    fn empty_scalar() -> Event {
+        Event::Scalar(String::new())
+    }
+}
+
 #[derive(Debug)]
 pub struct Parser<T> {
     scanner: Scanner<T>,
@@ -265,7 +271,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 |TokenType::StreamEndToken => {
                     self.pop_state();
                     // empty scalar
-                    Ok(Event::Scalar(String::new()))
+                    Ok(Event::empty_scalar())
                 },
             _ => {
                 self.parse_node(true, false)
@@ -324,7 +330,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                         => {
                             self.state = State::BlockMappingValue;
                             // empty scalar
-                            Ok(Event::Scalar(String::new()))
+                            Ok(Event::empty_scalar())
                         }
                     _ => {
                         self.push_state(State::BlockMappingValue);
@@ -354,7 +360,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                             => {
                                 self.state = State::BlockMappingValue;
                                 // empty scalar
-                                Ok(Event::Scalar(String::new()))
+                                Ok(Event::empty_scalar())
                             }
                         _ => {
                             self.push_state(State::BlockMappingKey);
@@ -365,7 +371,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 _ => {
                     self.state = State::BlockMappingKey;
                     // empty scalar
-                    Ok(Event::Scalar(String::new()))
+                    Ok(Event::empty_scalar())
                 }
             }
     }
@@ -432,7 +438,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 match tok.1 {
                     TokenType::BlockEntryToken | TokenType::BlockEndToken => {
                         self.state = State::BlockSequenceEntry;
-                        Ok(Event::Scalar(String::new()))
+                        Ok(Event::empty_scalar())
                     },
                     _ => {
                         self.push_state(State::BlockSequenceEntry);
