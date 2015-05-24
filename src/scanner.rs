@@ -540,7 +540,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 // indicators ends a plain scalar
                 match self.ch() {
                     ':' if is_blankz(self.buffer[1]) => break,
-                    ',' | ':' | '?' | '[' | ']' |'{' |'}' => break,
+                    ',' | ':' | '?' | '[' | ']' |'{' |'}' if self.flow_level > 0 => break,
                     _ => {}
                 }
 
@@ -718,7 +718,7 @@ a4:
 ".to_string();
         let p = Scanner::new(s.chars());
         for t in p {
-            // println!("{:?}", t);
+            println!("{:?}", t);
         }
     }
 }

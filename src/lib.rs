@@ -1,3 +1,5 @@
+extern crate regex;
+
 pub mod yaml;
 pub mod scanner;
 pub mod parser;

@@ -1,4 +1,5 @@
 use scanner::*;
+use yaml::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum State {
@@ -67,7 +68,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             states: Vec::new(),
             state: State::StreamStart,
             marks: Vec::new(),
-            token: None
+            token: None,
         }
     }
 
@@ -104,38 +105,35 @@ impl<T: Iterator<Item=char>> Parser<T> {
         ev
     }
 
-    pub fn load(&mut self) -> Result<(), ScanError> {
+    pub fn load(&mut self) -> Result<Yaml, ScanError> {
         if !self.scanner.stream_started() {
             let ev = try!(self.parse());
             assert_eq!(ev, Event::StreamStart);
         }
 
         if self.scanner.stream_ended() {
-            return Ok(());
+            return Ok(Yaml::Null);
         }
         let ev = try!(self.parse());
         if ev == Event::StreamEnd {
-            return Ok(());
+            return Ok(Yaml::Null);
         }
-        try!(self.load_document(&ev));
-        Ok(())
+        self.load_document(&ev)
     }
 
-    fn load_document(&mut self, first_ev: &Event) -> Result<(), ScanError> {
+    fn load_document(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         assert_eq!(first_ev, &Event::DocumentStart);
 
         let ev = try!(self.parse());
-        try!(self.load_node(&ev));
-
-        Ok(())
+        self.load_node(&ev)
     }
 
-    fn load_node(&mut self, first_ev: &Event) -> Result<(), ScanError> {
+    fn load_node(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         match *first_ev {
-            Event::Scalar(_) => {
+            Event::Scalar(ref v) => {
                 // TODO scalar
                 println!("Scalar: {:?}", first_ev);
-                Ok(())
+                Ok(Yaml::String(v.clone()))
             },
             Event::SequenceStart => {
                 self.load_sequence(first_ev)
@@ -147,31 +145,36 @@ impl<T: Iterator<Item=char>> Parser<T> {
         }
     }
 
-    fn load_mapping(&mut self, first_ev: &Event) -> Result<(), ScanError> {
+    fn load_mapping(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         let mut ev = try!(self.parse());
+        let mut map = Hash::new();
         while ev != Event::MappingEnd {
             // key
-            try!(self.load_node(&ev));
+            let key = try!(self.load_node(&ev));
 
             // value
             ev = try!(self.parse());
-            try!(self.load_node(&ev));
+            let value = try!(self.load_node(&ev));
+
+            map.insert(key, value);
 
             // next event
             ev = try!(self.parse());
         }
-        Ok(())
+        Ok(Yaml::Hash(map))
     }
 
-    fn load_sequence(&mut self, first_ev: &Event) -> Result<(), ScanError> {
+    fn load_sequence(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         let mut ev = try!(self.parse());
+        let mut vec = Vec::new();
         while ev != Event::SequenceEnd {
-            try!(self.load_node(&ev));
+            let entry = try!(self.load_node(&ev));
+            vec.push(entry);
 
             // next event
             ev = try!(self.parse());
         }
-        Ok(())
+        Ok(Yaml::Array(vec))
     }
 
     fn state_machine(&mut self) -> ParseResult {
@@ -182,6 +185,10 @@ impl<T: Iterator<Item=char>> Parser<T> {
             State::ImplicitDocumentStart => self.document_start(true),
             State::DocumentStart => self.document_start(false),
             State::DocumentContent => self.document_content(),
+
+            State::BlockNode => self.parse_node(true, false),
+            State::BlockNodeOrIndentlessSequence => self.parse_node(true, true),
+            State::FlowNode => self.parse_node(false, false),
 
             State::BlockMappingFirstKey => self.block_mapping_key(true),
             State::BlockMappingKey => self.block_mapping_key(false),
@@ -240,7 +247,6 @@ impl<T: Iterator<Item=char>> Parser<T> {
             _ if implicit => {
                 self.push_state(State::DocumentEnd);
                 self.state = State::BlockNode;
-                self.skip();
                 Ok(Event::DocumentStart)
             },
             _ => {
@@ -460,7 +466,7 @@ mod test {
     use super::*;
     #[test]
     fn test_parser() {
-        let s: String = "---
+        let s: String = "
 # comment
 a0 bb: val
 a1:
@@ -474,8 +480,8 @@ a4:
     - 2
 ".to_string();
         let mut parser = Parser::new(s.chars());
-        parser.load().unwrap();
-
+        let out = parser.load().unwrap();
+        println!("DOC {:?}", out);
     }
 }
 
