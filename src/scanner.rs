@@ -166,7 +166,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
     }
 
-    fn lookhead(&mut self, count: usize) {
+    fn lookahead(&mut self, count: usize) {
         if self.buffer.len() >= count {
             return;
         }
@@ -232,7 +232,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     }
 
     pub fn fetch_next_token(&mut self) -> ScanResult {
-        self.lookhead(1);
+        self.lookahead(1);
         // println!("--> fetch_next_token Cur {:?} {:?}", self.mark, self.ch());
 
         if !self.stream_start_produced {
@@ -246,7 +246,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let mark = self.mark;
         self.unroll_indent(mark.col as isize);
 
-        self.lookhead(4);
+        self.lookahead(4);
 
         if is_z(self.ch()) {
             try!(self.fetch_stream_end());
@@ -362,7 +362,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
     fn skip_to_next_token(&mut self) {
         loop {
-            self.lookhead(1);
+            self.lookahead(1);
             // TODO(chenyh) BOM
             match self.ch() {
                 ' ' => self.skip(),
@@ -373,7 +373,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                         self.allow_simple_key();
                     }
                 },
-                '#' => while !is_breakz(self.ch()) { self.skip(); self.lookhead(1); },
+                '#' => while !is_breakz(self.ch()) { self.skip(); self.lookahead(1); },
                 _ => break
             }
         }
@@ -517,7 +517,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
         loop {
             /* Check for a document indicator. */
-            self.lookhead(4);
+            self.lookahead(4);
 
             if self.mark.col == 0 &&
                 ((self.buffer[0] == '-') &&
@@ -569,11 +569,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
                 string.push(self.ch());
                 self.skip();
-                self.lookhead(2);
+                self.lookahead(2);
             }
             // is the end?
             if !(is_blank(self.ch()) || is_break(self.ch())) { break; }
-            self.lookhead(1);
+            self.lookahead(1);
 
             while is_blank(self.ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
@@ -590,7 +590,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                         self.skip();
                     }
                 } else {
-                    self.lookhead(2);
+                    self.lookahead(2);
                     // Check if it is a first line break
                     if !leading_blanks {
                         whitespaces.clear();
@@ -600,7 +600,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                         self.read_break(&mut trailing_breaks);
                     }
                 }
-                self.lookhead(1);
+                self.lookahead(1);
             }
 
             // check intendation level
