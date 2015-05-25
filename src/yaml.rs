@@ -5,9 +5,8 @@ use std::str::FromStr;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
 pub enum Yaml {
-    I64(i64),
-    //U64(u64),
-    //F64(f64),
+    /// number types are stored as String
+    Number(string::String),
     String(string::String),
     Boolean(bool),
     Array(self::Array),
@@ -66,7 +65,6 @@ pub fn $name(&self) -> Option<$t> {
 );
 
 impl Yaml {
-    define_as!(as_i64, i64, I64);
     define_as!(as_bool, bool, Boolean);
 
     define_as_ref!(as_str, &str, String);
@@ -87,10 +85,9 @@ impl Yaml {
         }
     }
 
-    pub fn parse<T: FromStr>(&self) -> Option<T> {
-        // XXX(chenyh) precompile me
+    pub fn as_number<T: FromStr>(&self) -> Option<T> {
         match *self {
-            Yaml::String(ref v) => {
+            Yaml::Number(ref v) => {
                 v.parse::<T>().ok()
             },
             _ => None
@@ -140,8 +137,9 @@ c: [1, 2]
 ";
         let mut parser = Parser::new(s.chars());
         let out = parser.load().unwrap();
-        assert_eq!(out["a"].as_str().unwrap(), "1");
-        assert_eq!(out["c"][1].parse::<i32>().unwrap(), 2);
+        assert_eq!(out["a"].as_number::<i32>().unwrap(), 1);
+        assert_eq!(out["b"].as_number::<f32>().unwrap(), 2.2f32);
+        assert_eq!(out["c"][1].as_number::<i32>().unwrap(), 2);
         assert!(out["d"][0].is_badvalue());
         //assert_eq!(out.as_hash().unwrap()[&Yaml::String("a".to_string())].as_i64().unwrap(), 1i64);
     }

@@ -130,9 +130,20 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
     fn load_node(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         match *first_ev {
-            Event::Scalar(ref v, _) => {
+            Event::Scalar(ref v, style) => {
                 // TODO scalar
-                Ok(Yaml::String(v.clone()))
+                if style != TScalarStyle::Plain {
+                    Ok(Yaml::String(v.clone()))
+                } else {
+                    match v.as_ref() {
+                        "~" => Ok(Yaml::Null),
+                        "true" => Ok(Yaml::Boolean(true)),
+                        "false" => Ok(Yaml::Boolean(false)),
+                        // try parsing as f64
+                        _ if v.parse::<f64>().is_ok() => Ok(Yaml::Number(v.clone())),
+                        _ => Ok(Yaml::String(v.clone()))
+                    }
+                }
             },
             Event::SequenceStart => {
                 self.load_sequence(first_ev)
@@ -140,6 +151,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             Event::MappingStart => {
                 self.load_mapping(first_ev)
             },
+            // TODO more events
             _ => { unreachable!(); }
         }
     }
