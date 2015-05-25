@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
 pub enum Yaml {
-    /// number types are stored as String
+    /// number types are stored as String, and parsed on demand.
     Number(string::String),
     String(string::String),
     Boolean(bool),
@@ -19,28 +19,6 @@ pub enum Yaml {
 
 pub type Array = Vec<Yaml>;
 pub type Hash = BTreeMap<Yaml, Yaml>;
-
-/// The errors that can arise while parsing a YAML stream.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum ErrorCode {
-    InvalidSyntax,
-    InvalidNumber,
-    EOFWhileParsingObject,
-    EOFWhileParsingArray,
-    EOFWhileParsingValue,
-    EOFWhileParsingString,
-    KeyMustBeAString,
-    ExpectedColon,
-    TrailingCharacters,
-    TrailingComma,
-    InvalidEscape,
-    InvalidUnicodeCodePoint,
-    LoneLeadingSurrogateInHexEscape,
-    UnexpectedEndOfHexEscape,
-    UnrecognizedHex,
-    NotFourDigit,
-    NotUtf8,
-}
 
 macro_rules! define_as (
     ($name:ident, $t:ident, $yt:ident) => (

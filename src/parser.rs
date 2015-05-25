@@ -490,11 +490,13 @@ a4:
       - a2
     - 2
 a5: 'single_quoted'
-a5: \"double_quoted\"
+a6: \"double_quoted\"
+a7: 你好
 ".to_string();
         let mut parser = Parser::new(s.chars());
         let out = parser.load().unwrap();
         println!("DOC {:?}", out);
+        println!("DOC {}", out["a7"].as_str().unwrap());
     }
 }
 

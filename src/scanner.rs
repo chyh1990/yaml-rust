@@ -307,7 +307,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             '}' => try!(self.fetch_flow_collection_end(TokenType::FlowMappingEndToken)),
             ',' => try!(self.fetch_flow_entry()),
             '-' if is_blankz(nc) => try!(self.fetch_block_entry()),
-            '?' if self.flow_level > 0 || is_blankz(nc) => unimplemented!(),
+            '?' if self.flow_level > 0 || is_blankz(nc) => try!(self.fetch_key()),
             ':' if self.flow_level > 0 || is_blankz(nc) => try!(self.fetch_value()),
             '*' => unimplemented!(),
             '&' => unimplemented!(),
@@ -805,11 +805,36 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::Plain, string)))
     }
 
+    fn fetch_key(&mut self) -> ScanResult {
+        let start_mark = self.mark;
+        if self.flow_level == 0 {
+            // Check if we are allowed to start a new key (not nessesary simple).
+            if !self.simple_key_allowed {
+                return Err(ScanError::new(self.mark, "mapping keys are not allowed in this context"));
+            }
+            self.roll_indent(start_mark.col, None,
+                TokenType::BlockMappingStartToken, start_mark);
+        }
+
+        try!(self.remove_simple_key());
+
+        if self.flow_level == 0 {
+            self.allow_simple_key();
+        } else {
+            self.disallow_simple_key();
+        }
+
+        self.skip();
+        self.tokens.push_back(Token(start_mark, TokenType::KeyToken));
+        Ok(())
+    }
+
     fn fetch_value(&mut self) -> ScanResult {
         let sk = self.simple_keys.last().unwrap().clone();
         let start_mark = self.mark;
         if sk.possible {
-            let tok = Token(start_mark, TokenType::KeyToken);
+            // insert simple key
+            let tok = Token(sk.mark, TokenType::KeyToken);
             let tokens_parsed = self.tokens_parsed;
             self.insert_token(sk.token_number - tokens_parsed, tok); 
 
@@ -821,9 +846,22 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             self.disallow_simple_key();
         } else {
             // The ':' indicator follows a complex key.
-            unimplemented!();
-        }
+            if self.flow_level == 0 {
+                if !self.simple_key_allowed {
+                    return Err(ScanError::new(start_mark,
+                        "mapping values are not allowed in this context"));
+                }
 
+                self.roll_indent(start_mark.col, None,
+                    TokenType::BlockMappingStartToken, start_mark);
+            }
+
+            if self.flow_level == 0 {
+                self.allow_simple_key();
+            } else {
+                self.disallow_simple_key();
+            }
+        }
         self.skip();
         self.tokens.push_back(Token(start_mark, TokenType::ValueToken));
 
@@ -890,25 +928,340 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_tokenizer() {
-        let s: String = "---
-# comment
-a0 bb: val
-a1:
-    b1: 4
-    b2: d
-a2: 4
-a3: [1, 2, 3]
-a4:
-    - - a1
-      - a2
-    - 2
-".to_string();
-        let p = Scanner::new(s.chars());
-        for t in p {
-            println!("{:?}", t);
+    use super::TokenType::*;
+
+macro_rules! next {
+    ($p:ident, $tk:pat) => {{
+        let tok = $p.next().unwrap();
+        match tok.1 {
+            $tk => {},
+            _ => { panic!("unexpected token: {:?}",
+                    tok) }
         }
+    }}
+}
+
+macro_rules! next_scalar {
+    ($p:ident, $tk:expr, $v:expr) => {{
+        let tok = $p.next().unwrap();
+        match tok.1 {
+            ScalarToken(style, ref v) => {
+                assert_eq!(style, $tk);
+                assert_eq!(v, $v);
+            },
+            _ => { panic!("unexpected token: {:?}",
+                    tok) }
+        }
+    }}
+}
+
+macro_rules! end {
+    ($p:ident) => {{
+        assert_eq!($p.next(), None);
+    }}
+}
+    /// test cases in libyaml scanner.c
+    #[test]
+    fn test_empty() {
+        let s = "";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_scalar() {
+        let s = "a scalar";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, ScalarToken(TScalarStyle::Plain, _));
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_explicit_scalar() {
+        let s = 
+"---
+'a scalar'
+...
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, DocumentStartToken);
+        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
+        next!(p, DocumentEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_multiple_documents() {
+        let s = 
+"
+'a scalar'
+---
+'a scalar'
+---
+'a scalar'
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
+        next!(p, DocumentStartToken);
+        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
+        next!(p, DocumentStartToken);
+        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_a_flow_sequence() {
+        let s = "[item 1, item 2, item 3]";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, FlowSequenceStartToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 1");
+        next!(p, FlowEntryToken);
+        next!(p, ScalarToken(TScalarStyle::Plain, _));
+        next!(p, FlowEntryToken);
+        next!(p, ScalarToken(TScalarStyle::Plain, _));
+        next!(p, FlowSequenceEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_a_flow_mapping() {
+        let s = 
+"
+{
+    a simple key: a value, # Note that the KEY token is produced.
+    ? a complex key: another value,
+}
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, FlowMappingStartToken);
+        next!(p, KeyToken);
+        next!(p, ScalarToken(TScalarStyle::Plain, _));
+        next!(p, ValueToken);
+        next!(p, ScalarToken(TScalarStyle::Plain, _));
+        next!(p, FlowEntryToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "a complex key");
+        next!(p, ValueToken);
+        next!(p, ScalarToken(TScalarStyle::Plain, _));
+        next!(p, FlowEntryToken);
+        next!(p, FlowMappingEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_block_sequences() {
+        let s = 
+"
+- item 1
+- item 2
+-
+  - item 3.1
+  - item 3.2
+-
+  key 1: value 1
+  key 2: value 2
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 1");
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 2");
+        next!(p, BlockEntryToken);
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 3.1");
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 3.2");
+        next!(p, BlockEndToken);
+        next!(p, BlockEntryToken);
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key 1");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "value 1");
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key 2");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "value 2");
+        next!(p, BlockEndToken);
+        next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_block_mappings() {
+        let s = 
+"
+a simple key: a value   # The KEY token is produced here.
+? a complex key
+: another value
+a mapping:
+  key 1: value 1
+  key 2: value 2
+a sequence:
+  - item 1
+  - item 2
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, ValueToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, KeyToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, ValueToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, KeyToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, ValueToken); // libyaml comment seems to be wrong
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, ValueToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, KeyToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, ValueToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, BlockEndToken);
+        next!(p, KeyToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, ValueToken);
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, BlockEntryToken);
+        next!(p, ScalarToken(_, _));
+        next!(p, BlockEndToken);
+        next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+
+    }
+
+    #[test]
+    fn test_no_block_sequence_start() {
+        let s =
+"
+key:
+- item 1
+- item 2
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key");
+        next!(p, ValueToken);
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 1");
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 2");
+        next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_collections_in_sequence() {
+        let s =
+"
+- - item 1
+  - item 2
+- key 1: value 1
+  key 2: value 2
+- ? complex key
+  : complex value
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 1");
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 2");
+        next!(p, BlockEndToken);
+        next!(p, BlockEntryToken);
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key 1");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "value 1");
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key 2");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "value 2");
+        next!(p, BlockEndToken);
+        next!(p, BlockEntryToken);
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "complex key");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "complex value");
+        next!(p, BlockEndToken);
+        next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_collections_in_mapping() {
+        let s =
+"
+? a sequence
+: - item 1
+  - item 2
+? a mapping
+: key 1: value 1
+  key 2: value 2
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "a sequence");
+        next!(p, ValueToken);
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 1");
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "item 2");
+        next!(p, BlockEndToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "a mapping");
+        next!(p, ValueToken);
+        next!(p, BlockMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key 1");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "value 1");
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "key 2");
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "value 2");
+        next!(p, BlockEndToken);
+        next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
     }
 }
 
