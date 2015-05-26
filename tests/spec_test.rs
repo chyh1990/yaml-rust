@@ -18,7 +18,7 @@ enum TestEvent {
     OnNull,
 }
 
-fn yaml_to_test_events(root :&Yaml) -> Vec<TestEvent> {
+fn yaml_to_test_events(docs: &Vec<Yaml>) -> Vec<TestEvent> {
     fn next(root: &Yaml, evs: &mut Vec<TestEvent>) {
         match *root {
             Yaml::BadValue => { panic!("unexpected BadValue"); },
@@ -42,9 +42,11 @@ fn yaml_to_test_events(root :&Yaml) -> Vec<TestEvent> {
         }
     }
     let mut evs: Vec<TestEvent> = Vec::new();
-    evs.push(TestEvent::OnDocumentStart);
-    next(&root, &mut evs);
-    evs.push(TestEvent::OnDocumentEnd);
+    for doc in docs {
+        evs.push(TestEvent::OnDocumentStart);
+        next(doc, &mut evs);
+        evs.push(TestEvent::OnDocumentEnd);
+    }
     evs
 }
 

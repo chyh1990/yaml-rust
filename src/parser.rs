@@ -98,7 +98,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     pub fn parse(&mut self) -> ParseResult {
         if self.scanner.stream_ended()
             || self.state == State::End {
-            return Ok(Event::NoEvent);
+            return Ok(Event::StreamEnd);
         }
         let ev = self.state_machine();
         println!("EV {:?}", ev);
@@ -112,6 +112,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         }
 
         if self.scanner.stream_ended() {
+            // XXX has parsed?
             return Ok(Yaml::Null);
         }
         let ev = try!(self.parse());
@@ -121,11 +122,37 @@ impl<T: Iterator<Item=char>> Parser<T> {
         self.load_document(&ev)
     }
 
+    pub fn load_multidoc(&mut self) -> Result<Vec<Yaml>, ScanError> {
+        if !self.scanner.stream_started() {
+            let ev = try!(self.parse());
+            assert_eq!(ev, Event::StreamStart);
+        }
+
+        if self.scanner.stream_ended() {
+            // XXX has parsed?
+            return Ok(Vec::new());
+        }
+        let mut docs: Vec<Yaml> = Vec::new();
+        loop {
+            let ev = try!(self.parse());
+            if ev == Event::StreamEnd {
+                return Ok(docs);
+            }
+            docs.push(try!(self.load_document(&ev)));
+        }
+        unreachable!();
+    }
+
     fn load_document(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
         assert_eq!(first_ev, &Event::DocumentStart);
 
         let ev = try!(self.parse());
-        self.load_node(&ev)
+        let doc = try!(self.load_node(&ev));
+        // DOCUMENT-END is expected.
+        let ev = try!(self.parse());
+        assert_eq!(ev, Event::DocumentEnd);
+
+        Ok(doc)
     }
 
     fn load_node(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
@@ -193,9 +220,11 @@ impl<T: Iterator<Item=char>> Parser<T> {
         println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
         match self.state {
             State::StreamStart => self.stream_start(),
+
             State::ImplicitDocumentStart => self.document_start(true),
             State::DocumentStart => self.document_start(false),
             State::DocumentContent => self.document_content(),
+            State::DocumentEnd => self.document_end(),
 
             State::BlockNode => self.parse_node(true, false),
             State::BlockNodeOrIndentlessSequence => self.parse_node(true, true),
@@ -294,6 +323,24 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.parse_node(true, false)
             }
         }
+    }
+
+    fn document_end(&mut self) -> ParseResult {
+        let mut _implicit = true;
+        let tok = try!(self.peek());
+        let _start_mark = tok.0;
+
+        match tok.1 {
+            TokenType::DocumentEndToken => {
+                self.skip();
+                _implicit = false;
+            }
+            _ => {}
+        }
+
+        // TODO tag handling
+        self.state = State::DocumentStart;
+        Ok(Event::DocumentEnd)
     }
 
     fn parse_node(&mut self, block: bool, indentless_sequence: bool) -> ParseResult {
@@ -495,8 +542,23 @@ a7: 你好
 ".to_string();
         let mut parser = Parser::new(s.chars());
         let out = parser.load().unwrap();
-        println!("DOC {:?}", out);
-        println!("DOC {}", out["a7"].as_str().unwrap());
+        assert_eq!(out["a7"].as_str().unwrap(), "你好");
+    }
+
+    #[test]
+    fn test_multi_doc() {
+        let s = 
+"
+'a scalar'
+---
+'a scalar'
+---
+'a scalar'
+";
+        let mut p = Parser::new(s.chars());
+        let out = p.load_multidoc().unwrap();
+        assert_eq!(out.len(), 3);
+
     }
 }
 
