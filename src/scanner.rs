@@ -147,6 +147,10 @@ fn is_blank(c: char) -> bool {
 fn is_blankz(c: char) -> bool {
     is_blank(c) || is_breakz(c)
 }
+#[inline]
+fn is_digit(c: char) -> bool {
+    c >= '0' && c <= '9'
+}
 
 pub type ScanResult = Result<(), ScanError>;
 
@@ -312,8 +316,10 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             '*' => unimplemented!(),
             '&' => unimplemented!(),
             '!' => unimplemented!(),
-            '|' if self.flow_level == 0 => unimplemented!(),
-            '>' if self.flow_level == 0 => unimplemented!(),
+            // Is it a literal scalar?
+            '|' if self.flow_level == 0 => try!(self.fetch_block_scalar(true)),
+            // Is it a folded scalar?
+            '>' if self.flow_level == 0 => try!(self.fetch_block_scalar(false)),
             '\'' => try!(self.fetch_flow_scalar(true)),
             '"' => try!(self.fetch_flow_scalar(false)),
             // plain scalar
@@ -514,6 +520,194 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.skip();
 
         self.tokens.push_back(Token(mark, t));
+        Ok(())
+    }
+
+    fn fetch_block_scalar(&mut self, literal: bool) -> ScanResult {
+        try!(self.save_simple_key());
+        self.allow_simple_key();
+        let tok = try!(self.scan_block_scalar(literal));
+
+        self.tokens.push_back(tok);
+        Ok(())
+    }
+
+    fn scan_block_scalar(&mut self, literal: bool) -> Result<Token, ScanError> {
+        let start_mark = self.mark;
+        let mut chomping: i32 = 0;
+        let mut increment: usize = 0;
+        let mut indent: usize = 0;
+        let mut trailing_blank: bool = false;
+        let mut leading_blank: bool = false;
+
+        let mut string = String::new();
+        let mut leading_break = String::new();
+        let mut trailing_breaks = String::new();
+
+        // skip '|' or '>'
+        self.skip();
+        self.lookahead(1);
+
+        if self.ch() == '+' || self.ch() == '-' {
+            if self.ch() == '+' {
+                chomping = 1;
+            } else {
+                chomping = -1;
+            }
+            self.skip();
+            self.lookahead(1);
+            if is_digit(self.ch()) {
+                if self.ch() == '0' {
+                    return Err(ScanError::new(start_mark,
+                            "while scanning a block scalar, found an intendation indicator equal to 0"));
+                }
+                increment = (self.ch() as usize) - ('0' as usize);
+                self.skip();
+            }
+        } else if is_digit(self.ch()) {
+            if self.ch() == '0' {
+                return Err(ScanError::new(start_mark,
+                         "while scanning a block scalar, found an intendation indicator equal to 0"));
+            }
+
+            increment = (self.ch() as usize) - ('0' as usize);
+            self.skip();
+            self.lookahead(1);
+            if self.ch() == '+' || self.ch() == '-' {
+                if self.ch() == '+' {
+                    chomping = 1;
+                } else {
+                    chomping = -1;
+                }
+                self.skip();
+            }
+        }
+
+        // Eat whitespaces and comments to the end of the line.
+        self.lookahead(1);
+
+        while is_blank(self.ch()) {
+            self.skip();
+            self.lookahead(1);
+        }
+
+        if self.ch() == '#' {
+            while !is_breakz(self.ch()) {
+                self.skip();
+                self.lookahead(1);
+            }
+        }
+
+        // Check if we are at the end of the line.
+        if !is_breakz(self.ch()) {
+            return Err(ScanError::new(start_mark,
+                    "while scanning a block scalar, did not find expected comment or line break"));
+        }
+
+        if is_break(self.ch()) {
+            self.lookahead(2);
+            self.skip_line();
+        }
+
+        if increment > 0 {
+            indent = if self.indent >= 0 { (self.indent + increment as isize) as usize } else { increment }
+        }
+        // Scan the leading line breaks and determine the indentation level if needed.
+        try!(self.block_scalar_breaks(&mut indent, &mut trailing_breaks));
+        
+        self.lookahead(1);
+
+        let start_mark = self.mark;
+
+        while self.mark.col == indent && !is_z(self.ch()) {
+            println!("-->  {:?}", self.ch());
+            // We are at the beginning of a non-empty line.
+            trailing_blank = is_blank(self.ch());
+            if !literal && !leading_break.is_empty()
+                && !leading_blank && !trailing_blank {
+                    if trailing_breaks.is_empty() {
+                        string.push(' ');
+                    }
+                    leading_break.clear();
+            } else {
+                string.extend(leading_break.chars());
+                leading_break.clear();
+            }
+
+            string.extend(trailing_breaks.chars());
+            trailing_breaks.clear();
+
+            leading_blank = is_blank(self.ch());
+
+            while !is_breakz(self.ch()) {
+                println!("---->  {:?}", self.ch());
+                string.push(self.ch());
+                self.skip();
+                self.lookahead(1);
+            }
+
+            self.lookahead(2);
+            self.skip_line();
+
+            // Eat the following intendation spaces and line breaks.
+            try!(self.block_scalar_breaks(&mut indent, &mut trailing_breaks));
+        }
+
+        // Chomp the tail.
+        if chomping != -1 {
+            string.extend(leading_break.chars());
+        }
+
+        if chomping == 1 {
+            string.extend(trailing_breaks.chars());
+        }
+
+        if literal {
+            Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::Literal, string)))
+        } else {
+            Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::Foled, string)))
+        }
+    }
+
+    fn block_scalar_breaks(&mut self, indent: &mut usize, breaks: &mut String) -> ScanResult {
+        let mut max_indent = 0;
+        loop {
+            self.lookahead(1);
+            while (*indent == 0 || self.mark.col < *indent)
+                && self.buffer[0] == ' ' {
+                    self.skip();
+                    self.lookahead(1);
+            }
+
+            if self.mark.col > max_indent {
+                max_indent = self.mark.col;
+            }
+
+            // Check for a tab character messing the intendation.
+            if (*indent == 0 || self.mark.col < *indent)
+                && self.buffer[0] == '\t' {
+                return Err(ScanError::new(self.mark, 
+                        "while scanning a block scalar, found a tab character where an intendation space is expected"));
+            }
+
+            if !is_break(self.ch()) {
+                break;
+            }
+
+            self.lookahead(2);
+            // Consume the line break.
+            self.read_break(breaks);
+        }
+
+        if *indent == 0 {
+            *indent = max_indent;
+            if *indent < (self.indent + 1) as usize {
+                *indent = (self.indent + 1) as usize;
+            }
+            if *indent < 1 {
+                *indent = 1;
+            }
+        }
         Ok(())
     }
 

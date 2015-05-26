@@ -59,6 +59,10 @@ pub struct Parser<T> {
     token: Option<Token>,
 }
 
+pub trait EventReceiver {
+    fn on_event(&mut self, ev: &Event);
+}
+
 pub type ParseResult = Result<Event, ScanError>;
 
 impl<T: Iterator<Item=char>> Parser<T> {

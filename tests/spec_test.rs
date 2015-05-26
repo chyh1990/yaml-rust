@@ -19,6 +19,7 @@ enum TestEvent {
 }
 
 fn yaml_to_test_events(docs: &Vec<Yaml>) -> Vec<TestEvent> {
+    println!("DOCS {:?}", docs);
     fn next(root: &Yaml, evs: &mut Vec<TestEvent>) {
         match *root {
             Yaml::BadValue => { panic!("unexpected BadValue"); },
