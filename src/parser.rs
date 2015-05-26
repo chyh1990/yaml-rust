@@ -1,5 +1,5 @@
 use scanner::*;
-use yaml::*;
+// use yaml::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum State {
@@ -99,129 +99,107 @@ impl<T: Iterator<Item=char>> Parser<T> {
         self.states.push(state);
     }
 
-    pub fn parse(&mut self) -> ParseResult {
+    fn parse<R: EventReceiver>(&mut self, recv: &mut R)
+        -> ParseResult {
         if self.scanner.stream_ended()
             || self.state == State::End {
             return Ok(Event::StreamEnd);
         }
-        let ev = self.state_machine();
-        println!("EV {:?}", ev);
-        ev
+        let ev = try!(self.state_machine());
+        // println!("EV {:?}", ev);
+        recv.on_event(&ev);
+        Ok(ev)
     }
 
-    pub fn load(&mut self) -> Result<Yaml, ScanError> {
+    pub fn load<R: EventReceiver>(&mut self, recv: &mut R, multi: bool)
+        -> Result<(), ScanError> {
         if !self.scanner.stream_started() {
-            let ev = try!(self.parse());
+            let ev = try!(self.parse(recv));
             assert_eq!(ev, Event::StreamStart);
         }
 
         if self.scanner.stream_ended() {
             // XXX has parsed?
-            return Ok(Yaml::Null);
+            recv.on_event(&Event::StreamEnd);
+            return Ok(());
         }
-        let ev = try!(self.parse());
-        if ev == Event::StreamEnd {
-            return Ok(Yaml::Null);
-        }
-        self.load_document(&ev)
-    }
-
-    pub fn load_multidoc(&mut self) -> Result<Vec<Yaml>, ScanError> {
-        if !self.scanner.stream_started() {
-            let ev = try!(self.parse());
-            assert_eq!(ev, Event::StreamStart);
-        }
-
-        if self.scanner.stream_ended() {
-            // XXX has parsed?
-            return Ok(Vec::new());
-        }
-        let mut docs: Vec<Yaml> = Vec::new();
         loop {
-            let ev = try!(self.parse());
+            let ev = try!(self.parse(recv));
             if ev == Event::StreamEnd {
-                return Ok(docs);
+                recv.on_event(&Event::StreamEnd);
+                return Ok(());
             }
-            docs.push(try!(self.load_document(&ev)));
+            try!(self.load_document(&ev, recv));
+            if !multi {
+                break;
+            }
         }
-        unreachable!();
+        Ok(())
     }
 
-    fn load_document(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
+    fn load_document<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+        -> Result<(), ScanError> {
         assert_eq!(first_ev, &Event::DocumentStart);
 
-        let ev = try!(self.parse());
-        let doc = try!(self.load_node(&ev));
+        let ev = try!(self.parse(recv));
+        try!(self.load_node(&ev, recv));
+
         // DOCUMENT-END is expected.
-        let ev = try!(self.parse());
+        let ev = try!(self.parse(recv));
         assert_eq!(ev, Event::DocumentEnd);
 
-        Ok(doc)
+        Ok(())
     }
 
-    fn load_node(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
+    fn load_node<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+        -> Result<(), ScanError> {
         match *first_ev {
             Event::Scalar(ref v, style) => {
-                // TODO scalar
-                if style != TScalarStyle::Plain {
-                    Ok(Yaml::String(v.clone()))
-                } else {
-                    match v.as_ref() {
-                        "~" => Ok(Yaml::Null),
-                        "true" => Ok(Yaml::Boolean(true)),
-                        "false" => Ok(Yaml::Boolean(false)),
-                        // try parsing as f64
-                        _ if v.parse::<f64>().is_ok() => Ok(Yaml::Number(v.clone())),
-                        _ => Ok(Yaml::String(v.clone()))
-                    }
-                }
+                Ok(())
             },
             Event::SequenceStart => {
-                self.load_sequence(first_ev)
+                self.load_sequence(first_ev, recv)
             },
             Event::MappingStart => {
-                self.load_mapping(first_ev)
+                self.load_mapping(first_ev, recv)
             },
             // TODO more events
             _ => { unreachable!(); }
         }
     }
 
-    fn load_mapping(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
-        let mut ev = try!(self.parse());
-        let mut map = Hash::new();
+    fn load_mapping<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+        -> Result<(), ScanError> {
+        let mut ev = try!(self.parse(recv));
         while ev != Event::MappingEnd {
             // key
-            let key = try!(self.load_node(&ev));
+            try!(self.load_node(&ev, recv));
 
             // value
-            ev = try!(self.parse());
-            let value = try!(self.load_node(&ev));
-
-            map.insert(key, value);
+            ev = try!(self.parse(recv));
+            try!(self.load_node(&ev, recv));
 
             // next event
-            ev = try!(self.parse());
+            ev = try!(self.parse(recv));
         }
-        Ok(Yaml::Hash(map))
+        Ok(())
     }
 
-    fn load_sequence(&mut self, first_ev: &Event) -> Result<Yaml, ScanError> {
-        let mut ev = try!(self.parse());
-        let mut vec = Vec::new();
+    fn load_sequence<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+        -> Result<(), ScanError> {
+        let mut ev = try!(self.parse(recv));
         while ev != Event::SequenceEnd {
-            let entry = try!(self.load_node(&ev));
-            vec.push(entry);
+            let entry = try!(self.load_node(&ev, recv));
 
             // next event
-            ev = try!(self.parse());
+            ev = try!(self.parse(recv));
         }
-        Ok(Yaml::Array(vec))
+        Ok(())
     }
 
     fn state_machine(&mut self) -> ParseResult {
         let next_tok = self.peek();
-        println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
+        //println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
         match self.state {
             State::StreamStart => self.stream_start(),
 
@@ -526,43 +504,5 @@ impl<T: Iterator<Item=char>> Parser<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_parser() {
-        let s: String = "
-# comment
-a0 bb: val
-a1:
-    b1: 4
-    b2: d
-a2: 4 # i'm comment
-a3: [1, 2, 3]
-a4:
-    - - a1
-      - a2
-    - 2
-a5: 'single_quoted'
-a6: \"double_quoted\"
-a7: 你好
-".to_string();
-        let mut parser = Parser::new(s.chars());
-        let out = parser.load().unwrap();
-        assert_eq!(out["a7"].as_str().unwrap(), "你好");
-    }
-
-    #[test]
-    fn test_multi_doc() {
-        let s = 
-"
-'a scalar'
----
-'a scalar'
----
-'a scalar'
-";
-        let mut p = Parser::new(s.chars());
-        let out = p.load_multidoc().unwrap();
-        assert_eq!(out.len(), 3);
-
-    }
 }
 

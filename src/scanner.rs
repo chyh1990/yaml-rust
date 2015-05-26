@@ -620,7 +620,6 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let start_mark = self.mark;
 
         while self.mark.col == indent && !is_z(self.ch()) {
-            println!("-->  {:?}", self.ch());
             // We are at the beginning of a non-empty line.
             trailing_blank = is_blank(self.ch());
             if !literal && !leading_break.is_empty()
@@ -640,7 +639,6 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             leading_blank = is_blank(self.ch());
 
             while !is_breakz(self.ch()) {
-                println!("---->  {:?}", self.ch());
                 string.push(self.ch());
                 self.skip();
                 self.lookahead(1);
