@@ -230,6 +230,10 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
             State::IndentlessSequenceEntry => self.indentless_sequence_entry(),
 
+            State::FlowSequenceEntryMappingKey => self.flow_sequence_entry_mapping_key(),
+            State::FlowSequenceEntryMappingValue => self.flow_sequence_entry_mapping_value(),
+            State::FlowSequenceEntryMappingEnd => self.flow_sequence_entry_mapping_end(),
+
             _ => unimplemented!()
         }
     }
@@ -606,6 +610,55 @@ impl<T: Iterator<Item=char>> Parser<T> {
         }
     }
 
+    fn flow_sequence_entry_mapping_key(&mut self) -> ParseResult {
+        let tok = try!(self.peek());
+
+        match tok.1 {
+            TokenType::ValueToken
+                | TokenType::FlowEntryToken
+                | TokenType::FlowSequenceEndToken => {
+                    self.skip();
+                    self.state = State::FlowSequenceEntryMappingValue;
+                    Ok(Event::empty_scalar())
+            },
+            _ => {
+                self.push_state(State::FlowSequenceEntryMappingValue);
+                self.parse_node(false, false)
+            }
+        }
+    }
+
+    fn flow_sequence_entry_mapping_value(&mut self) -> ParseResult {
+        let tok = try!(self.peek());
+
+        match tok.1 {
+            TokenType::ValueToken => {
+                    self.skip();
+                    let tok = try!(self.peek());
+                    self.state = State::FlowSequenceEntryMappingValue;
+                    match tok.1 {
+                        TokenType::FlowEntryToken
+                            | TokenType::FlowSequenceEndToken => {
+                                self.state = State::FlowSequenceEntryMappingEnd;
+                                Ok(Event::empty_scalar())
+                        },
+                        _ => {
+                            self.push_state(State::FlowSequenceEntryMappingEnd);
+                            self.parse_node(false, false)
+                        }
+                    }
+            },
+            _ => {
+                self.state = State::FlowSequenceEntryMappingEnd;
+                Ok(Event::empty_scalar())
+            }
+        }
+    }
+
+    fn flow_sequence_entry_mapping_end(&mut self) -> ParseResult {
+        self.state = State::FlowSequenceEntry;
+        Ok(Event::MappingEnd)
+    }
 }
 
 #[cfg(test)]
