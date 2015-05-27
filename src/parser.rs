@@ -46,7 +46,8 @@ pub enum Event {
 
 impl Event {
     fn empty_scalar() -> Event {
-        Event::Scalar(String::new(), TScalarStyle::Plain)
+        // a null scalar
+        Event::Scalar("~".to_string(), TScalarStyle::Plain)
     }
 }
 
