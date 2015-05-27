@@ -222,6 +222,10 @@ impl<T: Iterator<Item=char>> Parser<T> {
             State::FlowSequenceFirstEntry => self.flow_sequence_entry(true),
             State::FlowSequenceEntry => self.flow_sequence_entry(false),
 
+            State::FlowMappingFirstKey => self.flow_mapping_key(true),
+            State::FlowMappingKey => self.flow_mapping_key(false),
+            State::FlowMappingValue => self.flow_mapping_value(false),
+
             State::IndentlessSequenceEntry => self.indentless_sequence_entry(),
 
             _ => unimplemented!()
@@ -424,6 +428,74 @@ impl<T: Iterator<Item=char>> Parser<T> {
             }
     }
 
+    fn flow_mapping_key(&mut self, first: bool) -> ParseResult {
+        if first {
+            let _ = try!(self.peek());
+            self.skip();
+        }
+        let mut tok = try!(self.peek());
+
+        if tok.1 != TokenType::FlowMappingEndToken {
+            if !first {
+                if tok.1 == TokenType::FlowEntryToken {
+                    self.skip();
+                    tok = try!(self.peek());
+                } else {
+                    return Err(ScanError::new(tok.0,
+                        "while parsing a flow mapping, did not find expected ',' or '}'"));
+                }
+            }
+
+            if tok.1 == TokenType::KeyToken {
+                self.skip();
+                tok = try!(self.peek());
+                match tok.1 {
+                    TokenType::ValueToken
+                        | TokenType::FlowEntryToken
+                        | TokenType::FlowMappingEndToken => {
+                        self.state = State::FlowMappingValue;
+                        return Ok(Event::empty_scalar());
+                    },
+                    _ => {
+                        self.push_state(State::FlowMappingValue);
+                        return self.parse_node(false, false);
+                    }
+                }
+            } else if (tok.1 != TokenType::FlowMappingEndToken) {
+                self.push_state(State::FlowMappingEmptyValue);
+                return self.parse_node(false, false);
+            }
+        }
+
+        self.pop_state();
+        self.skip();
+        Ok(Event::MappingEnd)
+    }
+
+    fn flow_mapping_value(&mut self, empty: bool) -> ParseResult {
+        let tok = try!(self.peek());
+        if empty {
+            self.state = State::FlowMappingKey;
+            return Ok(Event::empty_scalar());
+        }
+
+        if tok.1 == TokenType::ValueToken {
+            self.skip();
+            let mut tok = try!(self.peek());
+            match tok.1 {
+                TokenType::FlowEntryToken 
+                    | TokenType::FlowMappingEndToken => { },
+                _ => {
+                        self.push_state(State::FlowMappingKey);
+                        return self.parse_node(false, false);
+                }
+            }
+        }
+
+        self.state = State::FlowMappingKey;
+        Ok(Event::empty_scalar())
+    }
+
     fn flow_sequence_entry(&mut self, first: bool) -> ParseResult {
         // skip FlowMappingStartToken
         if first {
@@ -449,7 +521,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             _ => { /* next */ }
         }
         match tok.1 {
-            TokenType::FlowMappingEndToken => {
+            TokenType::FlowSequenceEndToken => {
                 self.pop_state();
                 self.skip();
                 Ok(Event::SequenceEnd)
