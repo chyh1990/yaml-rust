@@ -199,7 +199,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
     fn state_machine(&mut self) -> ParseResult {
         let next_tok = self.peek();
-        //println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
+        println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
         match self.state {
             State::StreamStart => self.stream_start(),
 
@@ -221,6 +221,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
             State::FlowSequenceFirstEntry => self.flow_sequence_entry(true),
             State::FlowSequenceEntry => self.flow_sequence_entry(false),
+
+            State::IndentlessSequenceEntry => self.indentless_sequence_entry(),
 
             _ => unimplemented!()
         }
@@ -460,6 +462,30 @@ impl<T: Iterator<Item=char>> Parser<T> {
             _ => {
                 self.push_state(State::FlowSequenceEntry);
                 self.parse_node(false, false)
+            }
+        }
+    }
+
+    fn indentless_sequence_entry(&mut self) -> ParseResult {
+        let mut tok = try!(self.peek());
+        if tok.1 != TokenType::BlockEntryToken {
+            self.pop_state();
+            return Ok(Event::SequenceEnd);
+        }
+
+        self.skip();
+        tok = try!(self.peek());
+        match tok.1 {
+            TokenType::BlockEntryToken
+                | TokenType::KeyToken
+                | TokenType::ValueToken
+                | TokenType::BlockEndToken => {
+                self.state = State::IndentlessSequenceEntry;
+                Ok(Event::empty_scalar())
+            },
+            _ => {
+                self.push_state(State::IndentlessSequenceEntry);
+                self.parse_node(true, false)
             }
         }
     }

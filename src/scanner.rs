@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::char;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TEncoding {
@@ -150,6 +151,21 @@ fn is_blankz(c: char) -> bool {
 #[inline]
 fn is_digit(c: char) -> bool {
     c >= '0' && c <= '9'
+}
+#[inline]
+fn is_hex(c: char) -> bool {
+    (c >= '0' && c <= '9')
+        || (c >= 'a' && c <= 'f')
+        || (c >= 'A' && c <= 'F')
+}
+#[inline]
+fn as_hex(c: char) -> u32 {
+    match c {
+        '0'...'9' => (c as u32) - ('0' as u32),
+        'a'...'f' => (c as u32) - ('a' as u32) + 10,
+        'A'...'F' => (c as u32) - ('A' as u32) + 10,
+        _ => unreachable!()
+    }
 }
 
 pub type ScanResult = Result<(), ScanError>;
@@ -804,9 +820,29 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                         self.skip();
                         // Consume an arbitrary escape code.
                         if code_length > 0 {
-                            let val = 0;
+                            let val = 0usize;
                             self.lookahead(code_length);
-                            unimplemented!();
+                            let mut value = 0u32;
+                            for i in 0..code_length {
+                                if !is_hex(self.buffer[i]) {
+                                    return Err(ScanError::new(start_mark,
+                                        "while parsing a quoted scalar, did not find expected hexdecimal number"));
+                                }
+                                value = (value << 4) + as_hex(self.buffer[i]);
+                            }
+
+                            let ch = match char::from_u32(value) {
+                                Some(v) => v,
+                                None => {
+                                    return Err(ScanError::new(start_mark,
+                                        "while parsing a quoted scalar, found invalid Unicode character escape code"));
+                                }
+                            };
+                            string.push(ch);
+
+                            for i in 0..code_length {
+                                self.skip();
+                            }
                         }
                     },
                     c => { string.push(c); self.skip(); }
