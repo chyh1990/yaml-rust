@@ -2,6 +2,7 @@
 extern crate yaml_rust;
 
 use yaml_rust::parser::{Parser, EventReceiver, Event};
+use yaml_rust::scanner::TScalarStyle;
 use yaml_rust::yaml::Yaml;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
@@ -31,7 +32,7 @@ impl EventReceiver for YamlChecker {
             Event::MappingStart => TestEvent::OnMapStart,
             Event::MappingEnd => TestEvent::OnMapEnd,
             Event::Scalar(ref v, style) => {
-                if v == "~" {
+                if v == "~" && style == TScalarStyle::Plain {
                     TestEvent::OnNull
                 } else {
                     TestEvent::OnScalar

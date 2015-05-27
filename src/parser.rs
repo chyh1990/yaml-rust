@@ -155,6 +155,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn load_node<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         match *first_ev {
+            Event::Alias => { unimplemented!() },
             Event::Scalar(ref v, style) => {
                 Ok(())
             },
@@ -164,8 +165,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
             Event::MappingStart => {
                 self.load_mapping(first_ev, recv)
             },
-            // TODO more events
-            _ => { unreachable!(); }
+            _ => { println!("UNREACHABLE EVENT: {:?}", first_ev);
+                unreachable!(); }
         }
     }
 
@@ -379,7 +380,9 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.skip();
                 let tok = try!(self.peek());
                 match tok.1 {
-                    TokenType::KeyToken | TokenType::ValueToken | TokenType::BlockEndToken
+                    TokenType::KeyToken
+                        | TokenType::ValueToken
+                        | TokenType::BlockEndToken
                         => {
                             self.state = State::BlockMappingValue;
                             // empty scalar
@@ -390,6 +393,11 @@ impl<T: Iterator<Item=char>> Parser<T> {
                         self.parse_node(true, true)
                     }
                 }
+            },
+            // XXX(chenyh): libyaml failed to parse spec 1.2, ex8.18
+            TokenType::ValueToken => {
+                self.state = State::BlockMappingValue;
+                Ok(Event::empty_scalar())
             },
             TokenType::BlockEndToken => {
                 self.pop_state();
@@ -411,7 +419,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                     match tok.1 {
                         TokenType::KeyToken | TokenType::ValueToken | TokenType::BlockEndToken
                             => {
-                                self.state = State::BlockMappingValue;
+                                self.state = State::BlockMappingKey;
                                 // empty scalar
                                 Ok(Event::empty_scalar())
                             }

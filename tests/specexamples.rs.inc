@@ -320,6 +320,7 @@ const EX8_16 : &'static str =
 const EX8_17 : &'static str =
     "? explicit key # Empty value\n? |\n  block key\n: - one # Explicit compact\n  - two # block value\n";
 
+// XXX libyaml failed this test
 const EX8_18 : &'static str =
     "plain key: in-line value\n:  # Both empty\n\"quoted key\":\n- entry\n";
 
