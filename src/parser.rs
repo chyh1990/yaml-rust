@@ -82,8 +82,12 @@ impl<T: Iterator<Item=char>> Parser<T> {
             self.token = self.scanner.next();
         }
         if self.token.is_none() {
-            return Err(ScanError::new(self.scanner.mark(), 
-                                      "unexpected eof"));
+            match self.scanner.get_error() {
+                None =>
+                return Err(ScanError::new(self.scanner.mark(), 
+                      "unexpected eof")),
+                Some(e) => return Err(e),
+            }
         }
         // XXX better?
         Ok(self.token.clone().unwrap())
@@ -200,7 +204,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     }
 
     fn state_machine(&mut self) -> ParseResult {
-        let next_tok = self.peek();
+        let next_tok = try!(self.peek());
         println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
         match self.state {
             State::StreamStart => self.stream_start(),
@@ -272,13 +276,14 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.skip();
                 return Ok(Event::StreamEnd);
             },
-            TokenType::VersionDirectiveToken
+            TokenType::VersionDirectiveToken(..)
                 | TokenType::TagDirectiveToken
                 | TokenType::DocumentStartToken => {
                     // explicit document
                     self._explict_document_start()
                 },
             _ if implicit => {
+                try!(self.parser_process_directives());
                 self.push_state(State::DocumentEnd);
                 self.state = State::BlockNode;
                 Ok(Event::DocumentStart)
@@ -290,7 +295,30 @@ impl<T: Iterator<Item=char>> Parser<T> {
         }
     }
 
+    fn parser_process_directives(&mut self) -> Result<(), ScanError> {
+        loop {
+            let tok = try!(self.peek());
+            match tok.1 {
+                TokenType::VersionDirectiveToken(_, _) => {
+                    // XXX parsing with warning according to spec
+                    //if major != 1 || minor > 2 {
+                    //    return Err(ScanError::new(tok.0,
+                    //        "found incompatible YAML document"));
+                    //}
+                },
+                TokenType::TagDirectiveToken => {
+                    unimplemented!();
+                },
+                _ => break
+            }
+            self.skip();
+        }
+        // TODO tag directive
+        Ok(())
+    }
+
     fn _explict_document_start(&mut self) -> ParseResult {
+        try!(self.parser_process_directives());
         let tok = try!(self.peek());
         if tok.1 != TokenType::DocumentStartToken {
             return Err(ScanError::new(tok.0, "did not find expected <document start>"));
@@ -304,7 +332,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn document_content(&mut self) -> ParseResult {
         let tok = try!(self.peek());
         match tok.1 {
-            TokenType::VersionDirectiveToken 
+            TokenType::VersionDirectiveToken(..)
                 |TokenType::TagDirectiveToken
                 |TokenType::DocumentStartToken
                 |TokenType::DocumentEndToken

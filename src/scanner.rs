@@ -54,7 +54,8 @@ pub enum TokenType {
     NoToken,
     StreamStartToken(TEncoding),
     StreamEndToken,
-    VersionDirectiveToken,
+    /// major, minor
+    VersionDirectiveToken(u32, u32),
     TagDirectiveToken,
     DocumentStartToken,
     DocumentEndToken,
@@ -103,6 +104,7 @@ pub struct Scanner<T> {
     mark: Marker,
     tokens: VecDeque<Token>,
     buffer: VecDeque<char>,
+    error: Option<ScanError>,
 
     stream_start_produced: bool,
     stream_end_produced: bool,
@@ -118,10 +120,13 @@ pub struct Scanner<T> {
 impl<T: Iterator<Item=char>> Iterator for Scanner<T> {
     type Item = Token;
     fn next(&mut self) -> Option<Token> {
+        if self.error.is_some() {
+            return None;
+        }
         match self.next_token() {
             Ok(tok) => tok,
             Err(e) => {
-                println!("Error: {:?}", e);
+                self.error = Some(e);
                 None
             }
         }
@@ -178,6 +183,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             buffer: VecDeque::new(),
             mark: Marker::new(0, 1, 0),
             tokens: VecDeque::new(),
+            error: None,
 
             stream_start_produced: false,
             stream_end_produced: false,
@@ -188,6 +194,13 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             flow_level: 0,
             tokens_parsed: 0,
             token_available: false,
+        }
+    }
+    #[inline]
+    pub fn get_error(&self) -> Option<ScanError> {
+        match self.error {
+            None => None,
+            Some(ref e) => Some(e.clone()),
         }
     }
 
@@ -296,8 +309,9 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             return Ok(());
         }
 
+        // Is it a directive?
         if self.mark.col == 0 && self.ch_is('%') {
-            unimplemented!();
+            return self.fetch_directive();
         }
 
         if self.mark.col == 0
@@ -447,6 +461,134 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
         self.tokens.push_back(Token(self.mark, TokenType::StreamEndToken));
         Ok(())
+    }
+
+    fn fetch_directive(&mut self) -> ScanResult {
+        self.unroll_indent(-1);
+        try!(self.remove_simple_key());
+
+        self.disallow_simple_key();
+
+        let tok = try!(self.scan_directive());
+
+        self.tokens.push_back(tok);
+
+        Ok(())
+    }
+
+    fn scan_directive(&mut self) -> Result<Token, ScanError> {
+        let start_mark = self.mark;
+        self.skip();
+
+        let name = try!(self.scan_directive_name());
+        let tok = match name.as_ref() {
+            "YAML" => {
+                try!(self.scan_version_directive_value(&start_mark))
+            },
+            "TAG" => {
+                try!(self.scan_tag_directive_value(&start_mark))
+            },
+            _ => return Err(ScanError::new(start_mark,
+                "while scanning a directive, found uknown directive name"))
+        };
+        self.lookahead(1);
+
+        while is_blank(self.ch()) {
+            self.skip();
+            self.lookahead(1);
+        }
+
+        if self.ch() == '#' {
+            while !is_breakz(self.ch()) {
+                self.skip();
+                self.lookahead(1);
+            }
+        }
+
+        if !is_breakz(self.ch()) {
+            return Err(ScanError::new(start_mark,
+                "while scanning a directive, did not find expected comment or line break"));
+        }
+
+        // Eat a line break
+        if is_break(self.ch()) {
+            self.lookahead(2);
+            self.skip_line();
+        }
+
+        Ok(tok)
+    }
+
+    fn scan_version_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
+        self.lookahead(1);
+
+        while is_blank(self.ch()) {
+            self.skip();
+            self.lookahead(1);
+        }
+
+        let major = try!(self.scan_version_directive_number(mark));
+
+        if self.ch() != '.' {
+            return Err(ScanError::new(*mark,
+                "while scanning a YAML directive, did not find expected digit or '.' character"));
+        }
+
+        self.skip();
+
+        let minor = try!(self.scan_version_directive_number(mark));
+
+        Ok(Token(*mark, TokenType::VersionDirectiveToken(major, minor)))
+    }
+
+    fn scan_directive_name(&mut self) -> Result<String, ScanError> {
+        let start_mark = self.mark;
+        let mut string = String::new();
+        self.lookahead(1);
+        while self.ch().is_alphabetic() {
+            string.push(self.ch());
+            self.skip();
+            self.lookahead(1);
+        }
+
+        if string.is_empty() {
+            return Err(ScanError::new(start_mark, 
+                    "while scanning a directive, could not find expected directive name"));
+        }
+
+        if !is_blankz(self.ch()) {
+            return Err(ScanError::new(start_mark, 
+                    "while scanning a directive, found unexpected non-alphabetical character"));
+        }
+
+        Ok(string)
+    }
+
+    fn scan_version_directive_number(&mut self, mark: &Marker) -> Result<u32, ScanError> {
+        let mut val = 0u32;
+        let mut length = 0usize;
+        self.lookahead(1);
+        while is_digit(self.ch()) {
+            if length + 1 > 9 {
+                return Err(ScanError::new(*mark,
+                    "while scanning a YAML directive, found extremely long version number"));
+            }
+            length += 1;
+            val = val * 10 + ((self.ch() as u32) - ('0' as u32));
+            self.skip();
+            self.lookahead(1);
+        }
+
+        if length == 0 {
+                return Err(ScanError::new(*mark,
+                    "while scanning a YAML directive, did not find expected version number"));
+        }
+
+        Ok(val)
+    }
+
+    fn scan_tag_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
+        unimplemented!();
     }
 
     fn fetch_flow_collection_start(&mut self, tok :TokenType) -> ScanResult {
