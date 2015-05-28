@@ -1,4 +1,5 @@
 use scanner::*;
+use std::collections::HashMap;
 // use yaml::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
@@ -61,6 +62,8 @@ pub struct Parser<T> {
     state: State,
     marks: Vec<Marker>,
     token: Option<Token>,
+    anchors: HashMap<String, usize>,
+    anchor_id: usize,
 }
 
 pub trait EventReceiver {
@@ -77,6 +80,10 @@ impl<T: Iterator<Item=char>> Parser<T> {
             state: State::StreamStart,
             marks: Vec::new(),
             token: None,
+
+            anchors: HashMap::new(),
+            // valid anchor_id starts from 1
+            anchor_id: 1,
         }
     }
 
@@ -137,6 +144,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 recv.on_event(&Event::StreamEnd);
                 return Ok(());
             }
+            // clear anchors before a new document
+            self.anchors.clear();
             try!(self.load_document(&ev, recv));
             if !multi {
                 break;
@@ -370,17 +379,33 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(Event::DocumentEnd)
     }
 
+    fn register_anchor(&mut self, name: &String, _: &Marker) -> Result<usize, ScanError> {
+        // anchors can be overrided/reused
+        // if self.anchors.contains_key(name) {
+        //     return Err(ScanError::new(*mark,
+        //         "while parsing anchor, found duplicated anchor"));
+        // }
+        let new_id = self.anchor_id;
+        self.anchor_id += 1;
+        self.anchors.insert(name.clone(), new_id);
+        Ok(new_id)
+    }
+
     fn parse_node(&mut self, block: bool, indentless_sequence: bool) -> ParseResult {
         let mut tok = try!(self.peek());
-        let anchor_id = 0;
+        let mut anchor_id = 0;
         match tok.1 {
-            TokenType::AliasToken(v) => {
+            TokenType::AliasToken(name) => {
                 self.pop_state();
                 self.skip();
                 // TODO(chenyh): find anchor id
-                return Ok(Event::Alias(0));
+                match self.anchors.get(&name) {
+                    None => return Err(ScanError::new(tok.0, "while parsing node, found unknown anchor")),
+                    Some(id) => return Ok(Event::Alias(*id))
+                }
             },
-            TokenType::AnchorToken(..) => {
+            TokenType::AnchorToken(name) => {
+                anchor_id = try!(self.register_anchor(&name, &tok.0));
                 self.skip();
                 tok = try!(self.peek());
                 if let TokenType::TagToken(_, _) = tok.1 {
@@ -393,7 +418,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 // but we haven't implemented it
                 self.skip();
                 tok = try!(self.peek());
-                if let TokenType::AnchorToken(_) = tok.1 {
+                if let TokenType::AnchorToken(name) = tok.1 {
+                    anchor_id = try!(self.register_anchor(&name, &tok.0));
                     self.skip();
                     tok = try!(self.peek());
                 }
@@ -722,10 +748,5 @@ impl<T: Iterator<Item=char>> Parser<T> {
         self.state = State::FlowSequenceEntry;
         Ok(Event::MappingEnd)
     }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
 }
 

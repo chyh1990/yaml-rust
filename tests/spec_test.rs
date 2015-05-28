@@ -67,3 +67,8 @@ macro_rules! assert_next {
 include!("specexamples.rs.inc");
 include!("spec_test.rs.inc");
 
+// hand-crafted tests
+//#[test]
+//fn test_hc_alias() {
+//}
+
