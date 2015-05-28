@@ -951,7 +951,14 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                             '"' => string.push('"'),
                             '\'' => string.push('\''),
                             '\\' => string.push('\\'),
-                            //'N' => { string.push('\xc2'); string.push('\x85') },
+                            // NEL (#x85)
+                            'N' => string.push(char::from_u32(0x85).unwrap()),
+                            // #xA0
+                            '_' => string.push(char::from_u32(0xA0).unwrap()),
+                            // LS (#x2028)
+                            'L' => string.push(char::from_u32(0x2028).unwrap()),
+                            // PS (#x2029)
+                            'P' => string.push(char::from_u32(0x2029).unwrap()),
                             'x' => code_length = 2,
                             'u' => code_length = 4,
                             'U' => code_length = 8,
