@@ -56,7 +56,8 @@ pub enum TokenType {
     StreamEndToken,
     /// major, minor
     VersionDirectiveToken(u32, u32),
-    TagDirectiveToken,
+    /// handle, prefix
+    TagDirectiveToken(String, String),
     DocumentStartToken,
     DocumentEndToken,
     BlockSequenceStartToken,
@@ -72,7 +73,7 @@ pub enum TokenType {
     ValueToken,
     AliasToken(String),
     AnchorToken(String),
-    // handle, suffix
+    /// handle, suffix
     TagToken(String, String),
     ScalarToken(TScalarStyle, String)
 }
@@ -497,6 +498,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             "TAG" => {
                 try!(self.scan_tag_directive_value(&start_mark))
             },
+            // XXX This should be a warning instead of an error
             _ => return Err(ScanError::new(start_mark,
                 "while scanning a directive, found uknown directive name"))
         };
@@ -597,7 +599,32 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     }
 
     fn scan_tag_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
-        unimplemented!();
+        self.lookahead(1);
+        /* Eat whitespaces. */
+        while is_blank(self.ch()) {
+            self.skip();
+            self.lookahead(1);
+        }
+        let handle = try!(self.scan_tag_handle(true, mark));
+
+        self.lookahead(1);
+        /* Eat whitespaces. */
+        while is_blank(self.ch()) {
+            self.skip();
+            self.lookahead(1);
+        }
+
+        let is_secondary = handle == "!!";
+        let prefix = try!(self.scan_tag_uri(true, is_secondary, &String::new(), mark));
+
+        self.lookahead(1);
+
+        if !is_blankz(self.ch()) {
+            Err(ScanError::new(*mark,
+                "while scanning TAG, did not find expected whitespace or line break"))
+        } else {
+            Ok(Token(*mark, TokenType::TagDirectiveToken(handle, prefix)))
+        }
     }
 
     fn fetch_tag(&mut self) -> ScanResult {
@@ -612,7 +639,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     fn scan_tag(&mut self) -> Result<Token, ScanError> {
         let start_mark = self.mark;
         let mut handle = String::new();
-        let mut suffix = String::new();
+        let mut suffix;
         let mut secondary = false;
 
         // Check if the tag is in the canonical form (verbatim).
@@ -715,8 +742,8 @@ impl<T: Iterator<Item=char>> Scanner<T> {
          *      '%'.
          */
         while match self.ch() {
-            ';' | '/' | '?' | ':' | '@' | '&' if !is_secondary => true,
-            '=' | '+' | '$' | ',' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' | '[' | ']' if !is_secondary => true,
+            ';' | '/' | '?' | ':' | '@' | '&' => true,
+            '=' | '+' | '$' | ',' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' | '[' | ']' => true,
             '%' => true,
             c if is_alpha(c) => true,
             _ => false
@@ -1852,6 +1879,16 @@ key:
         next!(p, FlowMappingEndToken);
         next!(p, StreamEndToken);
         end!(p);
+    }
+
+    #[test]
+    fn test_uri() {
+        // TODO
+    }
+
+    #[test]
+    fn test_uri_escapes() {
+        // TODO
     }
 }
 

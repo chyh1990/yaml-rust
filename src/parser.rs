@@ -291,7 +291,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 return Ok(Event::StreamEnd);
             },
             TokenType::VersionDirectiveToken(..)
-                | TokenType::TagDirectiveToken
+                | TokenType::TagDirectiveToken(..)
                 | TokenType::DocumentStartToken => {
                     // explicit document
                     self._explict_document_start()
@@ -320,8 +320,9 @@ impl<T: Iterator<Item=char>> Parser<T> {
                     //        "found incompatible YAML document"));
                     //}
                 },
-                TokenType::TagDirectiveToken => {
-                    unimplemented!();
+                TokenType::TagDirectiveToken(..) => {
+                    // unimplemented!();
+                    // TODO add tag directive
                 },
                 _ => break
             }
@@ -347,7 +348,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         let tok = try!(self.peek());
         match tok.1 {
             TokenType::VersionDirectiveToken(..)
-                |TokenType::TagDirectiveToken
+                |TokenType::TagDirectiveToken(..)
                 |TokenType::DocumentStartToken
                 |TokenType::DocumentEndToken
                 |TokenType::StreamEndToken => {
