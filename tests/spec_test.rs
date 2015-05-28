@@ -27,17 +27,18 @@ impl EventReceiver for YamlChecker {
         let tev = match *ev {
             Event::DocumentStart => TestEvent::OnDocumentStart,
             Event::DocumentEnd => TestEvent::OnDocumentEnd,
-            Event::SequenceStart => TestEvent::OnSequenceStart,
+            Event::SequenceStart(..) => TestEvent::OnSequenceStart,
             Event::SequenceEnd => TestEvent::OnSequenceEnd,
-            Event::MappingStart => TestEvent::OnMapStart,
+            Event::MappingStart(..) => TestEvent::OnMapStart,
             Event::MappingEnd => TestEvent::OnMapEnd,
-            Event::Scalar(ref v, style) => {
+            Event::Scalar(ref v, style, _) => {
                 if v == "~" && style == TScalarStyle::Plain {
                     TestEvent::OnNull
                 } else {
                     TestEvent::OnScalar
                 }
             },
+            Event::Alias(_) => TestEvent::OnAlias,
             _ => { return } // ignore other events
         };
         self.evs.push(tev);

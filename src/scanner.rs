@@ -70,9 +70,10 @@ pub enum TokenType {
     FlowEntryToken,
     KeyToken,
     ValueToken,
-    AliasToken,
-    AnchorToken,
-    TagToken,
+    AliasToken(String),
+    AnchorToken(String),
+    // handle, suffix
+    TagToken(String, String),
     ScalarToken(TScalarStyle, String)
 }
 
@@ -156,6 +157,14 @@ fn is_blankz(c: char) -> bool {
 #[inline]
 fn is_digit(c: char) -> bool {
     c >= '0' && c <= '9'
+}
+#[inline]
+fn is_alpha(c: char) -> bool {
+    match c {
+        '0'...'9' | 'a'...'z' | 'A'...'Z' => true,
+        '_' | '-' => true,
+        _ => false
+    }
 }
 #[inline]
 fn is_hex(c: char) -> bool {
@@ -335,32 +344,32 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let c = self.buffer[0];
         let nc = self.buffer[1];
         match c {
-            '[' => try!(self.fetch_flow_collection_start(TokenType::FlowSequenceStartToken)),
-            '{' => try!(self.fetch_flow_collection_start(TokenType::FlowMappingStartToken)),
-            ']' => try!(self.fetch_flow_collection_end(TokenType::FlowSequenceEndToken)),
-            '}' => try!(self.fetch_flow_collection_end(TokenType::FlowMappingEndToken)),
-            ',' => try!(self.fetch_flow_entry()),
-            '-' if is_blankz(nc) => try!(self.fetch_block_entry()),
-            '?' if self.flow_level > 0 || is_blankz(nc) => try!(self.fetch_key()),
-            ':' if self.flow_level > 0 || is_blankz(nc) => try!(self.fetch_value()),
-            '*' => unimplemented!(),
-            '&' => unimplemented!(),
-            '!' => unimplemented!(),
+            '[' => self.fetch_flow_collection_start(TokenType::FlowSequenceStartToken),
+            '{' => self.fetch_flow_collection_start(TokenType::FlowMappingStartToken),
+            ']' => self.fetch_flow_collection_end(TokenType::FlowSequenceEndToken),
+            '}' => self.fetch_flow_collection_end(TokenType::FlowMappingEndToken),
+            ',' => self.fetch_flow_entry(),
+            '-' if is_blankz(nc) => self.fetch_block_entry(),
+            '?' if self.flow_level > 0 || is_blankz(nc) => self.fetch_key(),
+            ':' if self.flow_level > 0 || is_blankz(nc) => self.fetch_value(),
+            // Is it an alias?
+            '*' => self.fetch_anchor(true),
+            // Is it an anchor?
+            '&' => self.fetch_anchor(false),
+            '!' => self.fetch_tag(),
             // Is it a literal scalar?
-            '|' if self.flow_level == 0 => try!(self.fetch_block_scalar(true)),
+            '|' if self.flow_level == 0 => self.fetch_block_scalar(true),
             // Is it a folded scalar?
-            '>' if self.flow_level == 0 => try!(self.fetch_block_scalar(false)),
-            '\'' => try!(self.fetch_flow_scalar(true)),
-            '"' => try!(self.fetch_flow_scalar(false)),
+            '>' if self.flow_level == 0 => self.fetch_block_scalar(false),
+            '\'' => self.fetch_flow_scalar(true),
+            '"' => self.fetch_flow_scalar(false),
             // plain scalar
-            '-' if !is_blankz(nc) => try!(self.fetch_plain_scalar()),
-            ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => try!(self.fetch_plain_scalar()),
+            '-' if !is_blankz(nc) => self.fetch_plain_scalar(),
+            ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => self.fetch_plain_scalar(),
             '%' | '@' | '`' => return Err(ScanError::new(self.mark,
                     &format!("unexpected character: `{}'", c))),
-            _ => try!(self.fetch_plain_scalar()),
+            _ => self.fetch_plain_scalar(),
         }
-
-        Ok(())
     }
 
     pub fn next_token(&mut self) -> Result<Option<Token>, ScanError> {
@@ -545,7 +554,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let start_mark = self.mark;
         let mut string = String::new();
         self.lookahead(1);
-        while self.ch().is_alphabetic() {
+        while is_alpha(self.ch()) {
             string.push(self.ch());
             self.skip();
             self.lookahead(1);
@@ -589,6 +598,187 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
     fn scan_tag_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
         unimplemented!();
+    }
+
+    fn fetch_tag(&mut self) -> ScanResult {
+        try!(self.save_simple_key());
+        self.disallow_simple_key();
+
+        let tok = try!(self.scan_tag());
+        self.tokens.push_back(tok);
+        Ok(())
+    }
+
+    fn scan_tag(&mut self) -> Result<Token, ScanError> {
+        let start_mark = self.mark;
+        let mut handle = String::new();
+        let mut suffix = String::new();
+        let mut secondary = false;
+
+        // Check if the tag is in the canonical form (verbatim).
+        self.lookahead(2);
+
+        if self.buffer[1] == '<' {
+            // Eat '!<'
+            self.skip();
+            self.skip();
+            suffix = try!(self.scan_tag_uri(false, false, &String::new(), &start_mark));
+
+            if self.ch() != '>' {
+                return Err(ScanError::new(start_mark,
+                    "while scanning a tag, did not find the expected '>'"));
+            }
+
+            self.skip();
+        } else {
+            // The tag has either the '!suffix' or the '!handle!suffix' 
+            handle = try!(self.scan_tag_handle(false, &start_mark));
+            // Check if it is, indeed, handle.
+            if handle.len() >= 2 && handle.starts_with('!') && handle.ends_with('!') {
+                if handle == "!!" {
+                    secondary = true;
+                }
+                suffix = try!(self.scan_tag_uri(false, secondary, &String::new(), &start_mark));
+            } else {
+                suffix = try!(self.scan_tag_uri(false, false, &handle, &start_mark));
+                handle = "!".to_string();
+                // A special case: the '!' tag.  Set the handle to '' and the
+                // suffix to '!'.
+                if suffix.len() == 0 {
+                    handle.clear();
+                    suffix = "!".to_string();
+                }
+            }
+        }
+
+        self.lookahead(1);
+        if is_blankz(self.ch()) {
+            // XXX: ex 7.2, an empty scalar can follow a secondary tag
+            Ok(Token(start_mark, TokenType::TagToken(handle, suffix)))
+        } else {
+            Err(ScanError::new(start_mark,
+                "while scanning a tag, did not find expected whitespace or line break"))
+        }
+    }
+
+    fn scan_tag_handle(&mut self, directive: bool, mark: &Marker) -> Result<String, ScanError> {
+        let mut string = String::new();
+        self.lookahead(1);
+        if self.ch() != '!' {
+            return Err(ScanError::new(*mark,
+                "while scanning a tag, did not find expected '!'"));
+        }
+
+        string.push(self.ch());
+        self.skip();
+
+        self.lookahead(1);
+        while is_alpha(self.ch()) {
+            string.push(self.ch());
+            self.skip();
+            self.lookahead(1);
+        }
+
+        // Check if the trailing character is '!' and copy it.
+        if self.ch() == '!' {
+            string.push(self.ch());
+            self.skip();
+        } else {
+            // It's either the '!' tag or not really a tag handle.  If it's a %TAG
+            // directive, it's an error.  If it's a tag token, it must be a part of
+            // URI.
+            if directive && string != "!" {
+                return Err(ScanError::new(*mark,
+                    "while parsing a tag directive, did not find expected '!'"));
+            }
+        }
+        Ok(string)
+    }
+
+    fn scan_tag_uri(&mut self, directive: bool, is_secondary: bool,
+                head: &String, mark: &Marker) -> Result<String, ScanError> {
+        let mut length = head.len();
+        let mut string = String::new();
+
+        // Copy the head if needed.
+        // Note that we don't copy the leading '!' character.
+        if length > 1 {
+            string.extend(head.chars().skip(1));
+        }
+
+        self.lookahead(1);
+        /*
+         * The set of characters that may appear in URI is as follows:
+         *
+         *      '0'-'9', 'A'-'Z', 'a'-'z', '_', '-', ';', '/', '?', ':', '@', '&',
+         *      '=', '+', '$', ',', '.', '!', '~', '*', '\'', '(', ')', '[', ']',
+         *      '%'.
+         */
+        while match self.ch() {
+            ';' | '/' | '?' | ':' | '@' | '&' if !is_secondary => true,
+            '=' | '+' | '$' | ',' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' | '[' | ']' if !is_secondary => true,
+            '%' => true,
+            c if is_alpha(c) => true,
+            _ => false
+        } {
+            // Check if it is a URI-escape sequence.
+            if self.ch() == '%' {
+                unimplemented!();
+            } else {
+                string.push(self.ch());
+                self.skip();
+            }
+
+            length += 1;
+            self.lookahead(1);
+        }
+
+        if length == 0 {
+            return Err(ScanError::new(*mark,
+                "while parsing a tag, did not find expected tag URI"));
+        }
+
+        Ok(string)
+    }
+
+    fn fetch_anchor(&mut self, alias: bool) -> ScanResult {
+        try!(self.save_simple_key());
+        self.disallow_simple_key();
+
+        let tok = try!(self.scan_anchor(alias));
+
+        self.tokens.push_back(tok);
+
+        Ok(())
+    }
+
+    fn scan_anchor(&mut self, alias: bool)
+        -> Result<Token, ScanError> {
+        let mut string = String::new();
+        let start_mark = self.mark;
+
+        self.skip();
+        self.lookahead(1);
+        while is_alpha(self.ch()) {
+            string.push(self.ch());
+            self.skip();
+            self.lookahead(1);
+        }
+
+        if string.is_empty()
+            || match self.ch() {
+                c if is_blankz(c) => false,
+                '?' | ':' | ',' | ']' | '}' | '%' | '@' | '`' => false,
+                _ => true
+            } {
+            return Err(ScanError::new(start_mark, "while scanning an anchor or alias, did not find expected alphabetic or numeric character"));
+        }
+
+        if alias {
+            Ok(Token(start_mark, TokenType::AliasToken(string)))
+        } else {
+            Ok(Token(start_mark, TokenType::AnchorToken(string)))
+        }
     }
 
     fn fetch_flow_collection_start(&mut self, tok :TokenType) -> ScanResult {

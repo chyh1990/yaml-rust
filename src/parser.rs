@@ -36,18 +36,21 @@ pub enum Event {
     StreamEnd,
     DocumentStart,
     DocumentEnd,
-    Alias,
-    Scalar(String, TScalarStyle),
-    SequenceStart,
+    // anchor_id
+    Alias(usize),
+    Scalar(String, TScalarStyle, usize),
+    // anchor_id
+    SequenceStart(usize),
     SequenceEnd,
-    MappingStart,
+    // anchor_id
+    MappingStart(usize),
     MappingEnd
 }
 
 impl Event {
     fn empty_scalar() -> Event {
         // a null scalar
-        Event::Scalar("~".to_string(), TScalarStyle::Plain)
+        Event::Scalar("~".to_string(), TScalarStyle::Plain, 0)
     }
 }
 
@@ -111,7 +114,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             return Ok(Event::StreamEnd);
         }
         let ev = try!(self.state_machine());
-        // println!("EV {:?}", ev);
+         println!("EV {:?}", ev);
         recv.on_event(&ev);
         Ok(ev)
     }
@@ -159,14 +162,16 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn load_node<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         match *first_ev {
-            Event::Alias => { unimplemented!() },
-            Event::Scalar(_, _) => {
+            Event::Alias(..) => { 
                 Ok(())
             },
-            Event::SequenceStart => {
+            Event::Scalar(_, _, _) => {
+                Ok(())
+            },
+            Event::SequenceStart(_) => {
                 self.load_sequence(first_ev, recv)
             },
-            Event::MappingStart => {
+            Event::MappingStart(_) => {
                 self.load_mapping(first_ev, recv)
             },
             _ => { println!("UNREACHABLE EVENT: {:?}", first_ev);
@@ -366,34 +371,60 @@ impl<T: Iterator<Item=char>> Parser<T> {
     }
 
     fn parse_node(&mut self, block: bool, indentless_sequence: bool) -> ParseResult {
-        let tok = try!(self.peek());
+        let mut tok = try!(self.peek());
+        let anchor_id = 0;
         match tok.1 {
-            TokenType::AliasToken => unimplemented!(),
-            TokenType::AnchorToken => unimplemented!(),
+            TokenType::AliasToken(v) => {
+                self.pop_state();
+                self.skip();
+                // TODO(chenyh): find anchor id
+                return Ok(Event::Alias(0));
+            },
+            TokenType::AnchorToken(..) => {
+                self.skip();
+                tok = try!(self.peek());
+                if let TokenType::TagToken(_, _) = tok.1 {
+                    self.skip();
+                    tok = try!(self.peek());
+                }
+            },
+            TokenType::TagToken(..) => {
+                // XXX: ex 7.2, an empty scalar can follow a secondary tag
+                // but we haven't implemented it
+                self.skip();
+                tok = try!(self.peek());
+                if let TokenType::AnchorToken(_) = tok.1 {
+                    self.skip();
+                    tok = try!(self.peek());
+                }
+            },
+            _ => {}
+        }
+        match tok.1 {
             TokenType::BlockEntryToken if indentless_sequence => {
                 self.state = State::IndentlessSequenceEntry;
-                Ok(Event::SequenceStart)
+                Ok(Event::SequenceStart(anchor_id))
             },
             TokenType::ScalarToken(style, v) => {
                 self.pop_state();
                 self.skip();
-                Ok(Event::Scalar(v, style))
+                Ok(Event::Scalar(v, style, anchor_id))
             },
             TokenType::FlowSequenceStartToken => {
                 self.state = State::FlowSequenceFirstEntry;
-                Ok(Event::SequenceStart)
+                Ok(Event::SequenceStart(anchor_id))
             },
             TokenType::FlowMappingStartToken => {
                 self.state = State::FlowMappingFirstKey;
-                Ok(Event::MappingStart)
+                Ok(Event::MappingStart(anchor_id))
             },
             TokenType::BlockSequenceStartToken if block => {
                 self.state = State::BlockSequenceFirstEntry;
-                Ok(Event::SequenceStart)
+                Ok(Event::SequenceStart(anchor_id))
             },
             TokenType::BlockMappingStartToken if block => {
                 self.state = State::BlockMappingFirstKey;
-                Ok(Event::MappingStart)
+                Ok(Event::MappingStart(anchor_id))
             },
             _ => { Err(ScanError::new(tok.0, "while parsing a node, did not find expected node content")) }
         }
@@ -574,7 +605,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             TokenType::KeyToken => {
                 self.state = State::FlowSequenceEntryMappingKey;
                 self.skip();
-                Ok(Event::MappingStart)
+                Ok(Event::MappingStart(0))
             }
             _ => {
                 self.push_state(State::FlowSequenceEntry);

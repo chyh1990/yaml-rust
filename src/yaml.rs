@@ -14,6 +14,7 @@ pub enum Yaml {
     Boolean(bool),
     Array(self::Array),
     Hash(self::Hash),
+    Alias(usize),
     Null,
     /// Access non-exist node by Index trait will return BadValue.
     /// This simplifies error handling of user.
@@ -45,14 +46,14 @@ impl EventReceiver for YamlLoader {
                     _ => unreachable!()
                 }
             },
-            Event::SequenceStart => {
+            Event::SequenceStart(_) => {
                 self.doc_stack.push(Yaml::Array(Vec::new()));
             },
             Event::SequenceEnd => {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
-            Event::MappingStart => {
+            Event::MappingStart(_) => {
                 self.doc_stack.push(Yaml::Hash(Hash::new()));
                 self.key_stack.push(Yaml::BadValue);
             },
@@ -61,7 +62,7 @@ impl EventReceiver for YamlLoader {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
-            Event::Scalar(ref v, style) => {
+            Event::Scalar(ref v, style, _) => {
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v.clone())
                 } else {
@@ -77,6 +78,10 @@ impl EventReceiver for YamlLoader {
 
                 self.insert_new_node(node);
             },
+            Event::Alias(id) => {
+                // XXX(chenyh): how to handle alias?
+                self.insert_new_node(Yaml::Alias(id));
+            }
             _ => { /* ignore */ }
         }
         // println!("DOC {:?}", self.doc_stack);
