@@ -553,7 +553,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let mut chomping: i32 = 0;
         let mut increment: usize = 0;
         let mut indent: usize = 0;
-        let mut trailing_blank: bool = false;
+        let mut trailing_blank: bool;
         let mut leading_blank: bool = false;
 
         let mut string = String::new();
@@ -742,7 +742,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let mut leading_break = String::new();
         let mut trailing_breaks = String::new();
         let mut whitespaces = String::new();
-        let mut leading_blanks = false;
+        let mut leading_blanks;
 
         /* Eat the left quote. */
         self.skip();
@@ -820,7 +820,6 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                         self.skip();
                         // Consume an arbitrary escape code.
                         if code_length > 0 {
-                            let val = 0usize;
                             self.lookahead(code_length);
                             let mut value = 0u32;
                             for i in 0..code_length {
@@ -840,7 +839,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                             };
                             string.push(ch);
 
-                            for i in 0..code_length {
+                            for _ in 0..code_length {
                                 self.skip();
                             }
                         }
@@ -1488,6 +1487,30 @@ key:
         next_scalar!(p, TScalarStyle::Plain, "value 2");
         next!(p, BlockEndToken);
         next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
+    fn test_spec_ex7_3() {
+        let s =
+"
+{
+    ? foo :,
+    : bar,
+}
+";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, FlowMappingStartToken);
+        next!(p, KeyToken);
+        next_scalar!(p, TScalarStyle::Plain, "foo");
+        next!(p, ValueToken);
+        next!(p, FlowEntryToken);
+        next!(p, ValueToken);
+        next_scalar!(p, TScalarStyle::Plain, "bar");
+        next!(p, FlowEntryToken);
+        next!(p, FlowMappingEndToken);
         next!(p, StreamEndToken);
         end!(p);
     }

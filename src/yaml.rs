@@ -205,7 +205,6 @@ impl Index<usize> for Yaml {
 
 #[cfg(test)]
 mod test {
-    use parser::Parser;
     use yaml::*;
     #[test]
     fn test_coerce() {

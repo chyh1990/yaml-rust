@@ -156,7 +156,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         -> Result<(), ScanError> {
         match *first_ev {
             Event::Alias => { unimplemented!() },
-            Event::Scalar(ref v, style) => {
+            Event::Scalar(_, _) => {
                 Ok(())
             },
             Event::SequenceStart => {
@@ -170,7 +170,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         }
     }
 
-    fn load_mapping<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+    fn load_mapping<R: EventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         let mut ev = try!(self.parse(recv));
         while ev != Event::MappingEnd {
@@ -187,11 +187,11 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(())
     }
 
-    fn load_sequence<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+    fn load_sequence<R: EventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         let mut ev = try!(self.parse(recv));
         while ev != Event::SequenceEnd {
-            let entry = try!(self.load_node(&ev, recv));
+            try!(self.load_node(&ev, recv));
 
             // next event
             ev = try!(self.parse(recv));
@@ -367,7 +367,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.state = State::BlockMappingFirstKey;
                 Ok(Event::MappingStart)
             },
-            _ => { unimplemented!(); }
+            _ => { Err(ScanError::new(tok.0, "while parsing a node, did not find expected node content")) }
         }
     }
 
@@ -474,7 +474,11 @@ impl<T: Iterator<Item=char>> Parser<T> {
                         return self.parse_node(false, false);
                     }
                 }
-            } else if (tok.1 != TokenType::FlowMappingEndToken) {
+            // XXX libyaml fail ex 7.3, empty key
+            } else if tok.1 == TokenType::ValueToken {
+                self.state = State::FlowMappingValue;
+                return Ok(Event::empty_scalar());
+            } else if tok.1 != TokenType::FlowMappingEndToken {
                 self.push_state(State::FlowMappingEmptyValue);
                 return self.parse_node(false, false);
             }
@@ -494,7 +498,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
         if tok.1 == TokenType::ValueToken {
             self.skip();
-            let mut tok = try!(self.peek());
+            let tok = try!(self.peek());
             match tok.1 {
                 TokenType::FlowEntryToken 
                     | TokenType::FlowMappingEndToken => { },
