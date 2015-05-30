@@ -1,9 +1,9 @@
 #![allow(dead_code)]
+#![allow(non_upper_case_globals)]
 extern crate yaml_rust;
 
 use yaml_rust::parser::{Parser, EventReceiver, Event};
 use yaml_rust::scanner::TScalarStyle;
-use yaml_rust::yaml::Yaml;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 enum TestEvent {

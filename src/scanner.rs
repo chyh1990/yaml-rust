@@ -499,8 +499,18 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 try!(self.scan_tag_directive_value(&start_mark))
             },
             // XXX This should be a warning instead of an error
-            _ => return Err(ScanError::new(start_mark,
-                "while scanning a directive, found uknown directive name"))
+            _ => {
+                // skip current line
+                self.lookahead(1);
+                while !is_breakz(self.ch()) {
+                    self.skip();
+                    self.lookahead(1);
+                }
+                // XXX return an empty TagDirective token
+                Token(start_mark, TokenType::TagDirectiveToken(String::new(), String::new()))
+                // return Err(ScanError::new(start_mark,
+                //     "while scanning a directive, found unknown directive name"))
+            }
         };
         self.lookahead(1);
 
@@ -722,7 +732,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         Ok(string)
     }
 
-    fn scan_tag_uri(&mut self, directive: bool, is_secondary: bool,
+    fn scan_tag_uri(&mut self, directive: bool, _is_secondary: bool,
                 head: &String, mark: &Marker) -> Result<String, ScanError> {
         let mut length = head.len();
         let mut string = String::new();
@@ -750,7 +760,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         } {
             // Check if it is a URI-escape sequence.
             if self.ch() == '%' {
-                unimplemented!();
+                string.push(try!(self.scan_uri_escapes(directive, mark)));
             } else {
                 string.push(self.ch());
                 self.skip();
@@ -766,6 +776,58 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
 
         Ok(string)
+    }
+
+    fn scan_uri_escapes(&mut self, _directive: bool, mark: &Marker)
+        -> Result<char, ScanError> {
+        let mut width = 0usize;
+        let mut code = 0u32;
+        loop {
+            self.lookahead(3);
+
+            if !(self.ch() == '%' 
+                 && is_hex(self.buffer[1])
+                 && is_hex(self.buffer[2])) {
+                return Err(ScanError::new(*mark,
+                    "while parsing a tag, did not find URI escaped octet"));
+            }
+
+            let octet = (as_hex(self.buffer[1]) << 4) + as_hex(self.buffer[2]);
+            if width == 0 {
+                width = match octet {
+                    _ if octet & 0x80 == 0x00 => 1,
+                    _ if octet & 0xE0 == 0xC0 => 2,
+                    _ if octet & 0xF0 == 0xE0 => 3,
+                    _ if octet & 0xF8 == 0xF0 => 4,
+                    _ => {
+                        return Err(ScanError::new(*mark,
+                            "while parsing a tag, found an incorrect leading UTF-8 octet"));
+                    }
+                };
+                code = octet;
+            } else {
+                if octet & 0xc0 != 0x80 {
+                        return Err(ScanError::new(*mark,
+                            "while parsing a tag, found an incorrect trailing UTF-8 octet"));
+                }
+                code = (code << 8) + octet;
+            }
+
+            self.skip();
+            self.skip();
+            self.skip();
+
+            width -= 1;
+            if width == 0 {
+                break;
+            }
+        }
+
+        match char::from_u32(code) {
+            Some(ch) => Ok(ch),
+            None => Err(ScanError::new(*mark,
+                "while parsing a tag, found an invalid UTF-8 codepoint"))
+        }
     }
 
     fn fetch_anchor(&mut self, alias: bool) -> ScanResult {
