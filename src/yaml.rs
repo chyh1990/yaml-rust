@@ -4,12 +4,14 @@ use std::string;
 use std::str::FromStr;
 use std::mem;
 use parser::*;
-use scanner::{TScalarStyle, ScanError};
+use scanner::{TScalarStyle, ScanError, TokenType};
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
 pub enum Yaml {
-    /// number types are stored as String, and parsed on demand.
-    Number(string::String),
+    /// float types are stored as String, and parsed on demand.
+    /// Note that f64 does NOT implement Eq trait and can NOT be stored in BTreeMap
+    Real(string::String),
+    Integer(i64),
     String(string::String),
     Boolean(bool),
     Array(self::Array),
@@ -33,7 +35,7 @@ pub struct YamlLoader {
 
 impl EventReceiver for YamlLoader {
     fn on_event(&mut self, ev: &Event) {
-        println!("EV {:?}", ev);
+        // println!("EV {:?}", ev);
         match *ev {
             Event::DocumentStart => {
                 // do nothing
@@ -62,17 +64,48 @@ impl EventReceiver for YamlLoader {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
-            Event::Scalar(ref v, style, _) => {
+            Event::Scalar(ref v, style, _, ref tag) => {
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v.clone())
                 } else {
-                    match v.as_ref() {
-                        "~" => Yaml::Null,
-                        "true" => Yaml::Boolean(true),
-                        "false" => Yaml::Boolean(false),
-                        // try parsing as f64
-                        _ if v.parse::<f64>().is_ok() => Yaml::Number(v.clone()),
-                        _ => Yaml::String(v.clone())
+                    match tag {
+                        &Some(TokenType::TagToken(ref handle, ref suffix)) => {
+                            // XXX tag:yaml.org,2002:
+                            if handle == "!!" {
+                                match suffix.as_ref() {
+                                    "bool" => {
+                                        // "true" or "false"
+                                        match v.parse::<bool>() {
+                                            Err(_) => Yaml::BadValue,
+                                            Ok(v) => Yaml::Boolean(v)
+                                        }
+                                    },
+                                    "int" => {
+                                        match v.parse::<i64>() {
+                                            Err(_) => Yaml::BadValue,
+                                            Ok(v) => Yaml::Integer(v)
+                                        }
+                                    },
+                                    "float" => {
+                                        match v.parse::<f64>() {
+                                            Err(_) => Yaml::BadValue,
+                                            Ok(_) => Yaml::Real(v.clone())
+                                        }
+                                    },
+                                    "null" => {
+                                        match v.as_ref() {
+                                            "~" | "null" => Yaml::Null,
+                                            _ => Yaml::BadValue,
+                                        }
+                                    }
+                                    _  => Yaml::String(v.clone()),
+                                }
+                            } else {
+                                Yaml::String(v.clone())
+                            }
+                        },
+                        // Datatype is not specified, or unrecognized
+                        _ => { Yaml::from_str(v.as_ref()) }
                     }
                 };
 
@@ -149,6 +182,7 @@ pub fn $name(&self) -> Option<$t> {
 
 impl Yaml {
     define_as!(as_bool, bool, Boolean);
+    define_as!(as_i64, i64, Integer);
 
     define_as_ref!(as_str, &str, String);
     define_as_ref!(as_hash, &Hash, Hash);
@@ -168,17 +202,25 @@ impl Yaml {
         }
     }
 
-    pub fn as_number<T: FromStr>(&self) -> Option<T> {
+    pub fn as_f64(&self) -> Option<f64> {
         match *self {
-            Yaml::Number(ref v) => {
-                v.parse::<T>().ok()
+            Yaml::Real(ref v) => {
+                v.parse::<f64>().ok()
             },
             _ => None
         }
     }
 
-    pub fn from_str(s: &str) -> Yaml {
-        Yaml::String(s.to_string())
+    pub fn from_str(v: &str) -> Yaml {
+        match v {
+            "~" | "null" => Yaml::Null,
+            "true" => Yaml::Boolean(true),
+            "false" => Yaml::Boolean(false),
+            _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
+            // try parsing as f64
+            _ if v.parse::<f64>().is_ok() => Yaml::Real(v.to_string()),
+            _ => Yaml::String(v.to_string())
+        }
     }
 }
 
@@ -220,9 +262,9 @@ c: [1, 2]
 ";
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
-        assert_eq!(doc["a"].as_number::<i32>().unwrap(), 1);
-        assert_eq!(doc["b"].as_number::<f32>().unwrap(), 2.2f32);
-        assert_eq!(doc["c"][1].as_number::<i32>().unwrap(), 2);
+        assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
+        assert_eq!(doc["b"].as_f64().unwrap(), 2.2f64);
+        assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
         assert!(doc["d"][0].is_badvalue());
     }
 
@@ -246,7 +288,6 @@ a7: 你好
 ".to_string();
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
-        println!("DOC {:?}", doc);
         assert_eq!(doc["a7"].as_str().unwrap(), "你好");
     }
 
@@ -264,5 +305,57 @@ a7: 你好
         assert_eq!(out.len(), 3);
     }
 
+    #[test]
+    fn test_plain_datatype() {
+        let s =
+"
+- 'string'
+- \"string\"
+- string
+- 123
+- -321
+- 1.23
+- -1e4
+- ~
+- null
+- true
+- false
+- !!str 0
+- !!int 100
+- !!float 2
+- !!null ~
+- !!bool true
+- !!bool false
+# bad values
+- !!int string
+- !!float string
+- !!bool null
+- !!null val
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out[0];
+
+        assert_eq!(doc[0].as_str().unwrap(), "string");
+        assert_eq!(doc[1].as_str().unwrap(), "string");
+        assert_eq!(doc[2].as_str().unwrap(), "string");
+        assert_eq!(doc[3].as_i64().unwrap(), 123);
+        assert_eq!(doc[4].as_i64().unwrap(), -321);
+        assert_eq!(doc[5].as_f64().unwrap(), 1.23);
+        assert_eq!(doc[6].as_f64().unwrap(), -1e4);
+        assert!(doc[7].is_null());
+        assert!(doc[8].is_null());
+        assert_eq!(doc[9].as_bool().unwrap(), true);
+        assert_eq!(doc[10].as_bool().unwrap(), false);
+        assert_eq!(doc[11].as_str().unwrap(), "0");
+        assert_eq!(doc[12].as_i64().unwrap(), 100);
+        assert_eq!(doc[13].as_f64().unwrap(), 2.0);
+        assert!(doc[14].is_null());
+        assert_eq!(doc[15].as_bool().unwrap(), true);
+        assert_eq!(doc[16].as_bool().unwrap(), false);
+        assert!(doc[17].is_badvalue());
+        assert!(doc[18].is_badvalue());
+        assert!(doc[19].is_badvalue());
+        assert!(doc[20].is_badvalue());
+    }
 }
 

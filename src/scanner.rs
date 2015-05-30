@@ -1322,7 +1322,6 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                     trailing_breaks.clear();
                     leading_break.clear();
                 }
-                leading_blanks = false;
             } else {
                 string.extend(whitespaces.chars());
                 whitespaces.clear();

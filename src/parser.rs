@@ -39,7 +39,8 @@ pub enum Event {
     DocumentEnd,
     // anchor_id
     Alias(usize),
-    Scalar(String, TScalarStyle, usize),
+    // value, style, anchor_id, tag
+    Scalar(String, TScalarStyle, usize, Option<TokenType>),
     // anchor_id
     SequenceStart(usize),
     SequenceEnd,
@@ -51,7 +52,11 @@ pub enum Event {
 impl Event {
     fn empty_scalar() -> Event {
         // a null scalar
-        Event::Scalar("~".to_string(), TScalarStyle::Plain, 0)
+        Event::Scalar("~".to_string(), TScalarStyle::Plain, 0, None)
+    }
+
+    fn empty_scalar_with_anchor(anchor: usize, tag: TokenType) -> Event {
+        Event::Scalar("".to_string(), TScalarStyle::Plain, anchor, Some(tag))
     }
 }
 
@@ -121,7 +126,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             return Ok(Event::StreamEnd);
         }
         let ev = try!(self.state_machine());
-         println!("EV {:?}", ev);
+        // println!("EV {:?}", ev);
         recv.on_event(&ev);
         Ok(ev)
     }
@@ -174,7 +179,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             Event::Alias(..) => { 
                 Ok(())
             },
-            Event::Scalar(_, _, _) => {
+            Event::Scalar(..) => {
                 Ok(())
             },
             Event::SequenceStart(_) => {
@@ -218,8 +223,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
     }
 
     fn state_machine(&mut self) -> ParseResult {
-        let next_tok = try!(self.peek());
-        println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
+        // let next_tok = try!(self.peek());
+        // println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
         match self.state {
             State::StreamStart => self.stream_start(),
 
@@ -395,11 +400,11 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn parse_node(&mut self, block: bool, indentless_sequence: bool) -> ParseResult {
         let mut tok = try!(self.peek());
         let mut anchor_id = 0;
+        let mut tag = None;
         match tok.1 {
             TokenType::AliasToken(name) => {
                 self.pop_state();
                 self.skip();
-                // TODO(chenyh): find anchor id
                 match self.anchors.get(&name) {
                     None => return Err(ScanError::new(tok.0, "while parsing node, found unknown anchor")),
                     Some(id) => return Ok(Event::Alias(*id))
@@ -410,13 +415,13 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.skip();
                 tok = try!(self.peek());
                 if let TokenType::TagToken(_, _) = tok.1 {
+                    tag = Some(tok.1);
                     self.skip();
                     tok = try!(self.peek());
                 }
             },
             TokenType::TagToken(..) => {
-                // XXX: ex 7.2, an empty scalar can follow a secondary tag
-                // but we haven't implemented it
+                tag = Some(tok.1);
                 self.skip();
                 tok = try!(self.peek());
                 if let TokenType::AnchorToken(name) = tok.1 {
@@ -435,7 +440,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             TokenType::ScalarToken(style, v) => {
                 self.pop_state();
                 self.skip();
-                Ok(Event::Scalar(v, style, anchor_id))
+                Ok(Event::Scalar(v, style, anchor_id, tag))
             },
             TokenType::FlowSequenceStartToken => {
                 self.state = State::FlowSequenceFirstEntry;
@@ -452,6 +457,11 @@ impl<T: Iterator<Item=char>> Parser<T> {
             TokenType::BlockMappingStartToken if block => {
                 self.state = State::BlockMappingFirstKey;
                 Ok(Event::MappingStart(anchor_id))
+            },
+            // ex 7.2, an empty scalar can follow a secondary tag
+            _ if tag.is_some() || anchor_id > 0 => {
+                self.pop_state();
+                Ok(Event::empty_scalar_with_anchor(anchor_id, tag.unwrap()))
             },
             _ => { Err(ScanError::new(tok.0, "while parsing a node, did not find expected node content")) }
         }
@@ -683,7 +693,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.skip();
                 tok = try!(self.peek());
                 match tok.1 {
-                    TokenType::BlockEntryToken | TokenType::BlockEndToken => {
+                    TokenType::BlockEntryToken
+                        | TokenType::BlockEndToken => {
                         self.state = State::BlockSequenceEntry;
                         Ok(Event::empty_scalar())
                     },
