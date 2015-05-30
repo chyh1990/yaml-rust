@@ -2,6 +2,14 @@
 
 TEST_REGEX = /TEST_F\([a-zA-Z0-9_]+,\s+([a-zA-Z0-9_]+)\)/
 
+DISABLED_TESTS = %w(
+	test_ex7_10_plain_characters
+	test_ex7_17_flow_mapping_separate_values
+	test_ex7_21_single_pair_implicit_entries
+	test_ex7_2_empty_nodes
+	test_ex8_2_block_indentation_header
+)
+
 class Context
 	attr_accessor :name, :ev, :src
 	def initialize
@@ -54,7 +62,11 @@ end
 # code gen
 tests.each do |t|
 	next if t.ev.size == 0
-	puts "#[test]"
+	if DISABLED_TESTS.include? t.name
+		puts "#[allow(dead_code)]"
+	else
+		puts "#[test]"
+	end
 	puts "fn #{t.name}() {"
 	puts "    let mut v = str_to_test_events(#{t.src}).into_iter();"
 	t.ev.each do |e|

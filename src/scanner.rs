@@ -214,7 +214,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn lookahead(&mut self, count: usize) {
         if self.buffer.len() >= count {
             return;

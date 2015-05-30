@@ -928,7 +928,7 @@ fn test_ex7_1_alias_nodes() {
     assert_next!(v, TestEvent::OnDocumentEnd);
 }
 
-#[test]
+#[allow(dead_code)]
 fn test_ex7_2_empty_nodes() {
     let mut v = str_to_test_events(EX7_2).into_iter();
     assert_next!(v, TestEvent::OnDocumentStart);
@@ -1018,7 +1018,7 @@ fn test_ex7_9_single_quoted_lines() {
     assert_next!(v, TestEvent::OnDocumentEnd);
 }
 
-#[test]
+#[allow(dead_code)]
 fn test_ex7_10_plain_characters() {
     let mut v = str_to_test_events(EX7_10).into_iter();
     assert_next!(v, TestEvent::OnDocumentStart);
@@ -1135,7 +1135,7 @@ fn test_ex7_16_flow_mapping_entries() {
     assert_next!(v, TestEvent::OnDocumentEnd);
 }
 
-#[test]
+#[allow(dead_code)]
 fn test_ex7_17_flow_mapping_separate_values() {
     let mut v = str_to_test_events(EX7_17).into_iter();
     assert_next!(v, TestEvent::OnDocumentStart);
@@ -1193,7 +1193,7 @@ fn test_ex7_20_single_pair_explicit_entry() {
     assert_next!(v, TestEvent::OnDocumentEnd);
 }
 
-#[test]
+#[allow(dead_code)]
 fn test_ex7_21_single_pair_implicit_entries() {
     let mut v = str_to_test_events(EX7_21).into_iter();
     assert_next!(v, TestEvent::OnDocumentStart);
@@ -1270,7 +1270,7 @@ fn test_ex8_1_block_scalar_header() {
     assert_next!(v, TestEvent::OnDocumentEnd);
 }
 
-#[test]
+#[allow(dead_code)]
 fn test_ex8_2_block_indentation_header() {
     let mut v = str_to_test_events(EX8_2).into_iter();
     assert_next!(v, TestEvent::OnDocumentStart);
