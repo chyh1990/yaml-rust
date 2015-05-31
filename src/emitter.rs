@@ -233,7 +233,6 @@ a7: 你好
         let docs_new = YamlLoader::load_from_str(&s).unwrap();
         let doc_new = &docs_new[0];
 
-        println!("{}", writer);
         assert_eq!(doc, doc_new);
     }
 }
