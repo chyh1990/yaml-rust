@@ -3,7 +3,7 @@ use std::collections::HashMap;
 // use yaml::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
-pub enum State {
+enum State {
     StreamStart,
     ImplicitDocumentStart,
     DocumentStart,
@@ -30,21 +30,24 @@ pub enum State {
     End
 }
 
+/// `Event` is used with the low-level event base parsing API,
+/// see `EventReceiver` trait.
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub enum Event {
+    /// Reserved for internal use
     NoEvent,
     StreamStart,
     StreamEnd,
     DocumentStart,
     DocumentEnd,
-    // anchor_id
+    /// Refer to an anchor ID
     Alias(usize),
-    // value, style, anchor_id, tag
+    /// Value, style, anchor_id, tag
     Scalar(String, TScalarStyle, usize, Option<TokenType>),
-    // anchor_id
+    /// Anchor ID
     SequenceStart(usize),
     SequenceEnd,
-    // anchor_id
+    /// Anchor ID
     MappingStart(usize),
     MappingEnd
 }

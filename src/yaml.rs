@@ -6,20 +6,44 @@ use std::mem;
 use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType};
 
+/// An YAML node is store as this `Yaml` enumeration, it provides an easy way to
+/// access your YAML document.
+/// 
+/// # Examples
+/// 
+/// ```
+/// use yaml_rust::Yaml;
+/// let foo = Yaml::from_str("-123"); // convert the string to the appropriate YAML type
+/// assert_eq!(foo.as_i64().unwrap(), -123);
+/// 
+/// // iterator over an Array
+/// let vec = Yaml::Array(vec![Yaml::Integer(1), Yaml::Integer(2)]);
+/// for v in vec.as_vec().unwrap() {
+///     assert!(v.as_i64().is_some());
+/// }
+/// ```
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
 pub enum Yaml {
     /// float types are stored as String, and parsed on demand.
     /// Note that f64 does NOT implement Eq trait and can NOT be stored in BTreeMap
     Real(string::String),
+    /// Yaml int is stored as i64.
     Integer(i64),
+    /// Yaml scalar.
     String(string::String),
+    /// Yaml bool, e.g. `true` or `false`.
     Boolean(bool),
+    /// Yaml array, can be access as a `Vec`.
     Array(self::Array),
+    /// Yaml hash, can be access as a `BTreeMap`.
     Hash(self::Hash),
+    /// Alias, not fully supported yet.
     Alias(usize),
+    /// Yaml bool, e.g. `null` or `~`.
     Null,
-    /// Access non-exist node by Index trait will return BadValue.
-    /// This simplifies error handling of user.
+    /// Access non-exist node by Index trait will return `BadValue`.
+    /// This simplifies error handling of user. Invalid type conversion
+    /// also return `BadValue`.
     BadValue,
 }
 
