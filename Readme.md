@@ -8,7 +8,7 @@ The missing YAML 1.2 implementation for Rust.
 `yaml-rust` is a pure Rust YAML 1.2 implementation without
 any FFI and crate dependencies, which enjoys the memory safe 
 property and other benefits from the Rust language. 
-The parser is havily influenced by `libyaml` and `yaml-cpp`.
+The parser is heavily influenced by `libyaml` and `yaml-cpp`.
 
 NOTE: This library is still under heavily development.
 
