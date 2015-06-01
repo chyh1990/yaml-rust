@@ -10,6 +10,9 @@ any FFI and crate dependencies, which enjoys the memory safe
 property and other benefits from the Rust language. 
 The parser is heavily influenced by `libyaml` and `yaml-cpp`.
 
+This crate works on all Rust supported platforms and
+Rust 1.0.0 and nightly!
+
 NOTE: This library is still under heavily development.
 
 ## Quick Start
@@ -32,7 +35,7 @@ as Vec/HashMap:
 
 ```.rust
 extern crate yaml_rust;
-use yaml_rust::yaml;
+use yaml_rust::{YamlLoader, YamlEmitter};
 
 fn main() {
     let s =
@@ -44,7 +47,7 @@ bar:
     - 1
     - 2.0
 ";
-    let docs = yaml::YamlLoader::load_from_str(s).unwrap();
+    let docs = YamlLoader::load_from_str(s).unwrap();
 
     // Multi document support, doc is a yaml::Yaml
     let doc = &docs[0];
@@ -59,6 +62,14 @@ bar:
     // Chained key/array access is checked and won't panic,
     // return BadValue if they are not exist.
     assert!(doc["INVALID_KEY"][100].is_badvalue());
+    
+    // Dump the YAML object
+    let mut out_str = String::new();
+    {
+        let mut emitter = YamlEmitter::new(&mut out_str);
+        emitter.dump(doc).unwrap(); // dump the YAML object to a String
+    }
+    println!("{}", out_str);
 }
 ```
 
