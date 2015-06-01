@@ -15,7 +15,10 @@ Rust 1.0.0 and nightly!
 
 See [Document](http://chyh1990.github.io/yaml-rust/doc/yaml_rust/)
 
-NOTE: This library is still under heavily development.
+> NOTE: This library is still under heavily development.
+
+> WARNING: This library needs more tests and it is NOT ready for
+> parsing arbitrary user input from *untrusted source*.
 
 ## Quick Start
 
