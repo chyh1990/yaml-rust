@@ -13,6 +13,8 @@ The parser is heavily influenced by `libyaml` and `yaml-cpp`.
 This crate works on all Rust supported platforms and
 Rust 1.0.0 and nightly!
 
+See [Document](http://chyh1990.github.io/yaml-rust/doc/yaml_rust/)
+
 NOTE: This library is still under heavily development.
 
 ## Quick Start
