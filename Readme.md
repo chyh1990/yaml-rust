@@ -25,6 +25,13 @@ See [Document](http://chyh1990.github.io/yaml-rust/doc/yaml_rust/)
 Adding the following to the Cargo.toml in your project:
 
 ```
+[dependencies]
+yaml-rust = "*"
+```
+
+or
+
+```
 [dependencies.yaml-rust]
 git = "https://github.com/chyh1990/yaml-rust.git"
 ```
