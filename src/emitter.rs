@@ -217,6 +217,8 @@ a4:
     - - a1
       - a2
     - 2
+    - []
+    - {}
 a5: 'single_quoted'
 a6: \"double_quoted\"
 a7: 你好

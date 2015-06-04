@@ -1943,6 +1943,22 @@ key:
     }
 
     #[test]
+    fn test_scanner_cr() {
+        let s = "---\r\n- tok1\r\n- tok2";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStartToken(..));
+        next!(p, DocumentStartToken);
+        next!(p, BlockSequenceStartToken);
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "tok1");
+        next!(p, BlockEntryToken);
+        next_scalar!(p, TScalarStyle::Plain, "tok2");
+        next!(p, BlockEndToken);
+        next!(p, StreamEndToken);
+        end!(p);
+    }
+
+    #[test]
     fn test_uri() {
         // TODO
     }

@@ -259,8 +259,10 @@ impl<T: Iterator<Item=char>> Parser<T> {
             State::FlowSequenceEntryMappingKey => self.flow_sequence_entry_mapping_key(),
             State::FlowSequenceEntryMappingValue => self.flow_sequence_entry_mapping_value(),
             State::FlowSequenceEntryMappingEnd => self.flow_sequence_entry_mapping_end(),
+            State::FlowMappingEmptyValue => self.flow_mapping_value(true),
 
-            _ => unimplemented!()
+            /* impossible */
+            State::End => unreachable!(),
         }
     }
 
@@ -329,7 +331,6 @@ impl<T: Iterator<Item=char>> Parser<T> {
                     //}
                 },
                 TokenType::TagDirectiveToken(..) => {
-                    // unimplemented!();
                     // TODO add tag directive
                 },
                 _ => break
