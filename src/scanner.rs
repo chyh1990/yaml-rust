@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
-use std::char;
+use std::{char, fmt};
+use std::error::Error;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TEncoding {
@@ -46,6 +47,22 @@ impl ScanError {
             mark: loc,
             info: info.to_string()
         }
+    }
+}
+
+impl Error for ScanError {
+    fn description(&self) -> &str {
+        self.info.as_ref()
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
+impl fmt::Display for ScanError {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+       self.info.fmt(formatter) 
     }
 }
 
