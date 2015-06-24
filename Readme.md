@@ -104,7 +104,7 @@ documents.
 ## Specification Compliance
 
 This implementation aims to provide YAML parser fully compatible with
-the YAML 1.2 specification. The pasrser can correctly parse almost all
+the YAML 1.2 specification. The parser can correctly parse almost all
 examples in the specification, except for the following known bugs:
 
 * Empty plain scalar in certain contexts
