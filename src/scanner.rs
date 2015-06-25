@@ -62,7 +62,7 @@ impl Error for ScanError {
 
 impl fmt::Display for ScanError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-       self.info.fmt(formatter) 
+       self.info.fmt(formatter)
     }
 }
 
@@ -161,6 +161,10 @@ fn is_break(c: char) -> bool {
     c == '\n' || c == '\r'
 }
 #[inline]
+fn is_ms_break(c0: char, c1: char) -> bool {
+    c0 == '\n' && c1 == '\r'
+}
+#[inline]
 fn is_breakz(c: char) -> bool {
     is_break(c) || is_z(c)
 }
@@ -198,6 +202,16 @@ fn as_hex(c: char) -> u32 {
         'A'...'F' => (c as u32) - ('A' as u32) + 10,
         _ => unreachable!()
     }
+}
+#[inline]
+fn is_start_doc_line(buffer: &VecDeque<char>) -> bool {
+    // specification: http://yaml.org/spec/current.html#id2502724
+    buffer[0] == '-' && buffer[1] == '-' && buffer[2] == '-'
+}
+#[inline]
+fn is_end_doc_line(buffer: &VecDeque<char>) -> bool {
+    // specification: http://yaml.org/spec/current.html#id2502724
+    buffer[0] == '.' && buffer[1] == '.' && buffer[2] == '.'
 }
 
 pub type ScanResult = Result<(), ScanError>;
@@ -254,7 +268,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     }
     #[inline]
     fn skip_line(&mut self) {
-        if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
+        if is_ms_break(self.buffer[0], self.buffer[1]) {
             self.skip();
             self.skip();
         } else if is_break(self.buffer[0]) {
@@ -288,11 +302,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
     }
     #[inline]
     fn read_break(&mut self, s: &mut String) {
-        if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
+        if is_ms_break(self.buffer[0], self.buffer[1]) {
             s.push('\n');
             self.skip();
             self.skip();
-        } else if self.buffer[0] == '\r' || self.buffer[0] == '\n' {
+        } else if is_break(self.buffer[0]) {
             s.push('\n');
             self.skip();
         } else {
@@ -342,18 +356,14 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
 
         if self.mark.col == 0
-            && self.buffer[0] == '-'
-            && self.buffer[1] == '-'
-            && self.buffer[2] == '-'
+            && is_start_doc_line(&self.buffer)
             && is_blankz(self.buffer[3]) {
             try!(self.fetch_document_indicator(TokenType::DocumentStartToken));
             return Ok(());
         }
 
         if self.mark.col == 0
-            && self.buffer[0] == '.'
-            && self.buffer[1] == '.'
-            && self.buffer[2] == '.'
+            && is_end_doc_line(&self.buffer)
             && is_blankz(self.buffer[3]) {
             try!(self.fetch_document_indicator(TokenType::DocumentEndToken));
             return Ok(());
@@ -590,12 +600,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
 
         if string.is_empty() {
-            return Err(ScanError::new(start_mark, 
+            return Err(ScanError::new(start_mark,
                     "while scanning a directive, could not find expected directive name"));
         }
 
         if !is_blankz(self.ch()) {
-            return Err(ScanError::new(start_mark, 
+            return Err(ScanError::new(start_mark,
                     "while scanning a directive, found unexpected non-alphabetical character"));
         }
 
@@ -685,7 +695,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
             self.skip();
         } else {
-            // The tag has either the '!suffix' or the '!handle!suffix' 
+            // The tag has either the '!suffix' or the '!handle!suffix'
             handle = try!(self.scan_tag_handle(false, &start_mark));
             // Check if it is, indeed, handle.
             if handle.len() >= 2 && handle.starts_with('!') && handle.ends_with('!') {
@@ -802,7 +812,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         loop {
             self.lookahead(3);
 
-            if !(self.ch() == '%' 
+            if !(self.ch() == '%'
                  && is_hex(self.buffer[1])
                  && is_hex(self.buffer[2])) {
                 return Err(ScanError::new(*mark,
@@ -961,7 +971,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.tokens.push_back(Token(start_mark, TokenType::BlockEntryToken));
         Ok(())
     }
-    
+
     fn fetch_document_indicator(&mut self, t: TokenType) -> ScanResult {
         self.unroll_indent(-1);
         try!(self.remove_simple_key());
@@ -1068,7 +1078,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
         // Scan the leading line breaks and determine the indentation level if needed.
         try!(self.block_scalar_breaks(&mut indent, &mut trailing_breaks));
-        
+
         self.lookahead(1);
 
         let start_mark = self.mark;
@@ -1138,7 +1148,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             // Check for a tab character messing the intendation.
             if (*indent == 0 || self.mark.col < *indent)
                 && self.buffer[0] == '\t' {
-                return Err(ScanError::new(self.mark, 
+                return Err(ScanError::new(self.mark,
                         "while scanning a block scalar, found a tab character where an intendation space is expected"));
             }
 
@@ -1189,20 +1199,14 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             /* Check for a document indicator. */
             self.lookahead(4);
 
-            if self.mark.col == 0 &&
-                ((self.buffer[0] == '-') &&
-                (self.buffer[1] == '-') &&
-                (self.buffer[2] == '-')) ||
-                ((self.buffer[0] == '.') &&
-                (self.buffer[1] == '.') &&
-                (self.buffer[2] == '.')) &&
-                is_blankz(self.buffer[3]) {
-                    return Err(ScanError::new(start_mark, 
+            if self.mark.col == 0 && is_start_doc_line(&self.buffer)
+                || is_end_doc_line(&self.buffer) && is_blankz(self.buffer[3]) {
+                    return Err(ScanError::new(start_mark,
                         "while scanning a quoted scalar, found unexpected document indicator"));
                 }
 
             if is_z(self.ch()) {
-                    return Err(ScanError::new(start_mark, 
+                    return Err(ScanError::new(start_mark,
                         "while scanning a quoted scalar, found unexpected end of stream"));
             }
 
@@ -1379,16 +1383,10 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             /* Check for a document indicator. */
             self.lookahead(4);
 
-            if self.mark.col == 0 &&
-                ((self.buffer[0] == '-') &&
-                 (self.buffer[1] == '-') &&
-                 (self.buffer[2] == '-')) ||
-                    ((self.buffer[0] == '.') &&
-                     (self.buffer[1] == '.') &&
-                     (self.buffer[2] == '.')) &&
-                    is_blankz(self.buffer[3]) {
-                        break;
-                    }
+            if self.mark.col == 0 && is_start_doc_line(&self.buffer) ||
+                is_end_doc_line(&self.buffer) && is_blankz(self.buffer[3]) {
+                    break;
+                }
 
             if self.ch() == '#' { break; }
             while !is_blankz(self.ch()) {
@@ -1507,7 +1505,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             // insert simple key
             let tok = Token(sk.mark, TokenType::KeyToken);
             let tokens_parsed = self.tokens_parsed;
-            self.insert_token(sk.token_number - tokens_parsed, tok); 
+            self.insert_token(sk.token_number - tokens_parsed, tok);
 
             // Add the BLOCK-MAPPING-START token if needed.
             self.roll_indent(sk.mark.col, Some(sk.token_number),
@@ -1653,7 +1651,7 @@ macro_rules! end {
 
     #[test]
     fn test_explicit_scalar() {
-        let s = 
+        let s =
 "---
 'a scalar'
 ...
@@ -1669,7 +1667,7 @@ macro_rules! end {
 
     #[test]
     fn test_multiple_documents() {
-        let s = 
+        let s =
 "
 'a scalar'
 ---
@@ -1706,7 +1704,7 @@ macro_rules! end {
 
     #[test]
     fn test_a_flow_mapping() {
-        let s = 
+        let s =
 "
 {
     a simple key: a value, # Note that the KEY token is produced.
@@ -1733,7 +1731,7 @@ macro_rules! end {
 
     #[test]
     fn test_block_sequences() {
-        let s = 
+        let s =
 "
 - item 1
 - item 2
@@ -1776,7 +1774,7 @@ macro_rules! end {
 
     #[test]
     fn test_block_mappings() {
-        let s = 
+        let s =
 "
 a simple key: a value   # The KEY token is produced here.
 ? a complex key
