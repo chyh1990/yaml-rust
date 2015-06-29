@@ -102,7 +102,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         if self.token.is_none() {
             match self.scanner.get_error() {
                 None =>
-                return Err(ScanError::new(self.scanner.mark(), 
+                return Err(ScanError::new(self.scanner.mark(),
                       "unexpected eof")),
                 Some(e) => return Err(e),
             }
@@ -179,7 +179,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn load_node<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         match *first_ev {
-            Event::Alias(..) => { 
+            Event::Alias(..) => {
                 Ok(())
             },
             Event::Scalar(..) => {
@@ -600,7 +600,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             self.skip();
             let tok = try!(self.peek());
             match tok.1 {
-                TokenType::FlowEntryToken 
+                TokenType::FlowEntryToken
                     | TokenType::FlowMappingEndToken => { },
                 _ => {
                         self.push_state(State::FlowMappingKey);
@@ -765,4 +765,3 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(Event::MappingEnd)
     }
 }
-

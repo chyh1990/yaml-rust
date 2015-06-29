@@ -71,4 +71,3 @@ include!("spec_test.rs.inc");
 //#[test]
 //fn test_hc_alias() {
 //}
-

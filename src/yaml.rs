@@ -8,14 +8,14 @@ use scanner::{TScalarStyle, ScanError, TokenType};
 
 /// An YAML node is store as this `Yaml` enumeration, it provides an easy way to
 /// access your YAML document.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use yaml_rust::Yaml;
 /// let foo = Yaml::from_str("-123"); // convert the string to the appropriate YAML type
 /// assert_eq!(foo.as_i64().unwrap(), -123);
-/// 
+///
 /// // iterator over an Array
 /// let vec = Yaml::Array(vec![Yaml::Integer(1), Yaml::Integer(2)]);
 /// for v in vec.as_vec().unwrap() {
@@ -272,8 +272,6 @@ impl Index<usize> for Yaml {
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
     use yaml::*;
@@ -317,7 +315,7 @@ a7: 你好
 
     #[test]
     fn test_multi_doc() {
-        let s = 
+        let s =
 "
 'a scalar'
 ---
@@ -382,4 +380,3 @@ a7: 你好
         assert!(doc[20].is_badvalue());
     }
 }
-
