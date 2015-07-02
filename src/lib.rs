@@ -50,6 +50,7 @@ pub use emitter::{YamlEmitter, EmitError};
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_api() {
         let s =
@@ -91,6 +92,11 @@ mod tests {
         assert!(writer.len() > 0);
     }
 
+    fn try_fail(s: &str) -> Result<Vec<Yaml>, ScanError> {
+        let t = try!(YamlLoader::load_from_str(s));
+        Ok(t)
+    }
+
     #[test]
     fn test_fail() {
         let s =
@@ -101,6 +107,7 @@ key: [1, 2]]
 key1:a2
 ";
         assert!(YamlLoader::load_from_str(s).is_err());
+        assert!(try_fail(s).is_err());
     }
 
 }

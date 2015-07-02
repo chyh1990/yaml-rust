@@ -61,8 +61,10 @@ impl Error for ScanError {
 }
 
 impl fmt::Display for ScanError {
+    // col starts from 0
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-       self.info.fmt(formatter)
+        write!(formatter, "{} at line {} column {}", self.info,
+               self.mark.line, self.mark.col + 1)
     }
 }
 
