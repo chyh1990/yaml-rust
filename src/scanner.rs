@@ -1099,9 +1099,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 self.skip();
                 self.lookahead(1);
             }
+            // break on EOF
+            if is_z(self.ch()) { break; }
 
             self.lookahead(2);
-            self.skip_line();
+            self.read_break(&mut leading_break);
 
             // Eat the following intendation spaces and line breaks.
             try!(self.block_scalar_breaks(&mut indent, &mut trailing_breaks));
