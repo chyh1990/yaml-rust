@@ -53,8 +53,10 @@ pub type Hash = BTreeMap<Yaml, Yaml>;
 pub struct YamlLoader {
     docs: Vec<Yaml>,
     // states
-    doc_stack: Vec<Yaml>,
+    // (current node, anchor_id) tuple
+    doc_stack: Vec<(Yaml, usize)>,
     key_stack: Vec<Yaml>,
+    anchor_map: BTreeMap<usize, Yaml>,
 }
 
 impl EventReceiver for YamlLoader {
@@ -68,19 +70,19 @@ impl EventReceiver for YamlLoader {
                 match self.doc_stack.len() {
                     // empty document
                     0 => self.docs.push(Yaml::BadValue),
-                    1 => self.docs.push(self.doc_stack.pop().unwrap()),
+                    1 => self.docs.push(self.doc_stack.pop().unwrap().0),
                     _ => unreachable!()
                 }
             },
-            Event::SequenceStart(_) => {
-                self.doc_stack.push(Yaml::Array(Vec::new()));
+            Event::SequenceStart(aid) => {
+                self.doc_stack.push((Yaml::Array(Vec::new()), aid));
             },
             Event::SequenceEnd => {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
-            Event::MappingStart(_) => {
-                self.doc_stack.push(Yaml::Hash(Hash::new()));
+            Event::MappingStart(aid) => {
+                self.doc_stack.push((Yaml::Hash(Hash::new()), aid));
                 self.key_stack.push(Yaml::BadValue);
             },
             Event::MappingEnd => {
@@ -88,7 +90,7 @@ impl EventReceiver for YamlLoader {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
-            Event::Scalar(ref v, style, _, ref tag) => {
+            Event::Scalar(ref v, style, aid, ref tag) => {
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v.clone())
                 } else {
@@ -133,11 +135,14 @@ impl EventReceiver for YamlLoader {
                     }
                 };
 
-                self.insert_new_node(node);
+                self.insert_new_node((node, aid));
             },
             Event::Alias(id) => {
-                // XXX(chenyh): how to handle alias?
-                self.insert_new_node(Yaml::Alias(id));
+                let n = match self.anchor_map.get(&id) {
+                    Some(v) => v.clone(),
+                    None => Yaml::BadValue,
+                };
+                self.insert_new_node((n, 0));
             }
             _ => { /* ignore */ }
         }
@@ -146,21 +151,25 @@ impl EventReceiver for YamlLoader {
 }
 
 impl YamlLoader {
-    fn insert_new_node(&mut self, node: Yaml) {
+    fn insert_new_node(&mut self, node: (Yaml, usize)) {
+        // valid anchor id starts from 1
+        if node.1 > 0 {
+            self.anchor_map.insert(node.1, node.0.clone());
+        }
         if !self.doc_stack.is_empty() {
             let parent = self.doc_stack.last_mut().unwrap();
             match *parent {
-                Yaml::Array(ref mut v) => v.push(node),
-                Yaml::Hash(ref mut h) => {
+                (Yaml::Array(ref mut v), _) => v.push(node.0),
+                (Yaml::Hash(ref mut h), _) => {
                     let mut cur_key = self.key_stack.last_mut().unwrap();
                     // current node is a key
                     if cur_key.is_badvalue() {
-                        *cur_key = node;
+                        *cur_key = node.0;
                     // current node is a value
                     } else {
                         let mut newkey = Yaml::BadValue;
                         mem::swap(&mut newkey, cur_key);
-                        h.insert(newkey, node);
+                        h.insert(newkey, node.0);
                     }
                 },
                 _ => unreachable!(),
@@ -175,6 +184,7 @@ impl YamlLoader {
             docs: Vec::new(),
             doc_stack: Vec::new(),
             key_stack: Vec::new(),
+            anchor_map: BTreeMap::new(),
         };
         let mut parser = Parser::new(source.chars());
         try!(parser.load(&mut loader, true));
@@ -326,6 +336,35 @@ a7: 你好
         let out = YamlLoader::load_from_str(&s).unwrap();
         assert_eq!(out.len(), 3);
     }
+
+    #[test]
+    fn test_anchor() {
+        let s =
+"
+a1: &DEFAULT
+    b1: 4
+    b2: d
+a2: *DEFAULT
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out[0];
+        assert_eq!(doc["a2"]["b1"].as_i64().unwrap(), 4);
+    }
+
+    #[test]
+    fn test_bad_anchor() {
+        let s =
+"
+a1: &DEFAULT
+    b1: 4
+    b2: *DEFAULT
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out[0];
+        assert_eq!(doc["a1"]["b2"], Yaml::BadValue);
+
+    }
+
 
     #[test]
     fn test_plain_datatype() {
