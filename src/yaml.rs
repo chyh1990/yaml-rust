@@ -259,6 +259,9 @@ impl Yaml {
                 return Yaml::Integer(n.unwrap());
             }
         }
+        if v.starts_with("+") && v[1..].parse::<i64>().is_ok() {
+	    return Yaml::Integer(v[1..].parse::<i64>().unwrap());
+        }
         match v {
             "~" | "null" => Yaml::Null,
             "true" => Yaml::Boolean(true),
