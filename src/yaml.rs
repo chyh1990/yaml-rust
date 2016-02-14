@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
+use std::i64;
 use std::str::FromStr;
 use std::mem;
 use parser::*;
@@ -246,6 +247,21 @@ impl Yaml {
     }
 
     pub fn from_str(v: &str) -> Yaml {
+        if v.starts_with("0x") {
+            let n = i64::from_str_radix(&v[2..], 16); 
+            if n.is_ok() {
+                return Yaml::Integer(n.unwrap());
+            }
+        }
+        if v.starts_with("0o") {
+            let n = i64::from_str_radix(&v[2..], 8); 
+            if n.is_ok() {
+                return Yaml::Integer(n.unwrap());
+            }
+        }
+        if v.starts_with("+") && v[1..].parse::<i64>().is_ok() {
+	    return Yaml::Integer(v[1..].parse::<i64>().unwrap());
+        }
         match v {
             "~" | "null" => Yaml::Null,
             "true" => Yaml::Boolean(true),
@@ -387,11 +403,16 @@ a1: &DEFAULT
 - !!null ~
 - !!bool true
 - !!bool false
+- 0xFF
 # bad values
 - !!int string
 - !!float string
 - !!bool null
 - !!null val
+- 0o77
+- [ 0xF, 0xF ]
+- +12345
+- [ true, false ]
 ";
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
@@ -413,9 +434,16 @@ a1: &DEFAULT
         assert!(doc[14].is_null());
         assert_eq!(doc[15].as_bool().unwrap(), true);
         assert_eq!(doc[16].as_bool().unwrap(), false);
-        assert!(doc[17].is_badvalue());
+        assert_eq!(doc[17].as_i64().unwrap(), 255);
         assert!(doc[18].is_badvalue());
         assert!(doc[19].is_badvalue());
         assert!(doc[20].is_badvalue());
+        assert!(doc[21].is_badvalue());
+        assert_eq!(doc[22].as_i64().unwrap(), 63);
+        assert_eq!(doc[23][0].as_i64().unwrap(), 15);
+        assert_eq!(doc[23][1].as_i64().unwrap(), 15);
+        assert_eq!(doc[24].as_i64().unwrap(), 12345);
+        assert!(doc[25][0].as_bool().unwrap());
+        assert!(!doc[25][1].as_bool().unwrap());
     }
 }
