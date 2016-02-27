@@ -96,7 +96,7 @@ impl EventReceiver for YamlLoader {
                     Yaml::String(v.clone())
                 } else {
                     match tag {
-                        &Some(TokenType::TagToken(ref handle, ref suffix)) => {
+                        &Some(TokenType::Tag(ref handle, ref suffix)) => {
                             // XXX tag:yaml.org,2002:
                             if handle == "!!" {
                                 match suffix.as_ref() {
