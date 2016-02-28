@@ -45,7 +45,7 @@ impl ScanError {
     pub fn new(loc: Marker, info: &str) -> ScanError {
         ScanError {
             mark: loc,
-            info: info.to_string()
+            info: info.to_owned()
         }
     }
 }
@@ -233,7 +233,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn lookahead(&mut self, count: usize) {
         if self.buffer.len() >= count {
             return;
@@ -386,7 +386,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             // plain scalar
             '-' if !is_blankz(nc) => self.fetch_plain_scalar(),
             ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => self.fetch_plain_scalar(),
-            '%' | '@' | '`' => return Err(ScanError::new(self.mark,
+            '%' | '@' | '`' => Err(ScanError::new(self.mark,
                     &format!("unexpected character: `{}'", c))),
             _ => self.fetch_plain_scalar(),
         }
@@ -404,9 +404,8 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.token_available = false;
         self.tokens_parsed += 1;
 
-        match t.1 {
-            TokenType::StreamEnd => self.stream_end_produced = true,
-            _ => {}
+        if let TokenType::StreamEnd = t.1 {
+            self.stream_end_produced = true;
         }
         Ok(Some(t))
     }
@@ -697,12 +696,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 suffix = try!(self.scan_tag_uri(false, secondary, &String::new(), &start_mark));
             } else {
                 suffix = try!(self.scan_tag_uri(false, false, &handle, &start_mark));
-                handle = "!".to_string();
+                handle = "!".to_owned();
                 // A special case: the '!' tag.  Set the handle to '' and the
                 // suffix to '!'.
-                if suffix.len() == 0 {
+                if suffix.is_empty() {
                     handle.clear();
-                    suffix = "!".to_string();
+                    suffix = "!".to_owned();
                 }
             }
         }
@@ -739,20 +738,18 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         if self.ch() == '!' {
             string.push(self.ch());
             self.skip();
-        } else {
+        } else if directive && string != "!" {
             // It's either the '!' tag or not really a tag handle.  If it's a %TAG
             // directive, it's an error.  If it's a tag token, it must be a part of
             // URI.
-            if directive && string != "!" {
-                return Err(ScanError::new(*mark,
-                    "while parsing a tag directive, did not find expected '!'"));
-            }
+            return Err(ScanError::new(*mark,
+                "while parsing a tag directive, did not find expected '!'"));
         }
         Ok(string)
     }
 
     fn scan_tag_uri(&mut self, directive: bool, _is_secondary: bool,
-                head: &String, mark: &Marker) -> Result<String, ScanError> {
+                head: &str, mark: &Marker) -> Result<String, ScanError> {
         let mut length = head.len();
         let mut string = String::new();
 
@@ -1588,10 +1585,8 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
     fn remove_simple_key(&mut self) -> ScanResult {
         let last = self.simple_keys.last_mut().unwrap();
-        if last.possible {
-            if last.required {
-                return Err(ScanError::new(self.mark, "simple key expected"));
-            }
+        if last.possible && last.required {
+            return Err(ScanError::new(self.mark, "simple key expected"));
         }
 
         last.possible = false;

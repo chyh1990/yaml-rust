@@ -55,11 +55,11 @@ pub enum Event {
 impl Event {
     fn empty_scalar() -> Event {
         // a null scalar
-        Event::Scalar("~".to_string(), TScalarStyle::Plain, 0, None)
+        Event::Scalar("~".to_owned(), TScalarStyle::Plain, 0, None)
     }
 
     fn empty_scalar_with_anchor(anchor: usize, tag: TokenType) -> Event {
-        Event::Scalar("".to_string(), TScalarStyle::Plain, anchor, Some(tag))
+        Event::Scalar("".to_owned(), TScalarStyle::Plain, anchor, Some(tag))
     }
 }
 
@@ -179,10 +179,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn load_node<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         match *first_ev {
-            Event::Alias(..) => {
-                Ok(())
-            },
-            Event::Scalar(..) => {
+            Event::Alias(..) | Event::Scalar(..) => {
                 Ok(())
             },
             Event::SequenceStart(_) => {
@@ -275,7 +272,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
                 self.skip();
                 Ok(Event::StreamStart)
             },
-            _ => return Err(ScanError::new(tok.0,
+            _ => Err(ScanError::new(tok.0,
                     "did not find expected <stream-start>")),
         }
     }
@@ -283,14 +280,9 @@ impl<T: Iterator<Item=char>> Parser<T> {
     fn document_start(&mut self, implicit: bool) -> ParseResult {
         let mut tok = try!(self.peek());
         if !implicit {
-            loop {
-                match tok.1 {
-                    TokenType::DocumentEnd => {
-                        self.skip();
-                        tok = try!(self.peek());
-                    },
-                    _ => break
-                }
+            while let TokenType::DocumentEnd = tok.1 {
+                self.skip();
+                tok = try!(self.peek());
             }
         }
 
@@ -298,7 +290,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             TokenType::StreamEnd => {
                 self.state = State::End;
                 self.skip();
-                return Ok(Event::StreamEnd);
+                Ok(Event::StreamEnd)
             },
             TokenType::VersionDirective(..)
                 | TokenType::TagDirective(..)
@@ -376,12 +368,9 @@ impl<T: Iterator<Item=char>> Parser<T> {
         let tok = try!(self.peek());
         let _start_mark = tok.0;
 
-        match tok.1 {
-            TokenType::DocumentEnd => {
-                self.skip();
-                _implicit = false;
-            }
-            _ => {}
+        if let TokenType::DocumentEnd = tok.1 {
+            self.skip();
+            _implicit = false;
         }
 
         // TODO tag handling
@@ -389,7 +378,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(Event::DocumentEnd)
     }
 
-    fn register_anchor(&mut self, name: &String, _: &Marker) -> Result<usize, ScanError> {
+    fn register_anchor(&mut self, name: &str, _: &Marker) -> Result<usize, ScanError> {
         // anchors can be overrided/reused
         // if self.anchors.contains_key(name) {
         //     return Err(ScanError::new(*mark,
@@ -397,7 +386,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         // }
         let new_id = self.anchor_id;
         self.anchor_id += 1;
-        self.anchors.insert(name.clone(), new_id);
+        self.anchors.insert(name.to_owned(), new_id);
         Ok(new_id)
     }
 
