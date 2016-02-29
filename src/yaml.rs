@@ -94,46 +94,43 @@ impl EventReceiver for YamlLoader {
             Event::Scalar(ref v, style, aid, ref tag) => {
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v.clone())
-                } else {
-                    match tag {
-                        &Some(TokenType::TagToken(ref handle, ref suffix)) => {
-                            // XXX tag:yaml.org,2002:
-                            if handle == "!!" {
-                                match suffix.as_ref() {
-                                    "bool" => {
-                                        // "true" or "false"
-                                        match v.parse::<bool>() {
-                                            Err(_) => Yaml::BadValue,
-                                            Ok(v) => Yaml::Boolean(v)
-                                        }
-                                    },
-                                    "int" => {
-                                        match v.parse::<i64>() {
-                                            Err(_) => Yaml::BadValue,
-                                            Ok(v) => Yaml::Integer(v)
-                                        }
-                                    },
-                                    "float" => {
-                                        match v.parse::<f64>() {
-                                            Err(_) => Yaml::BadValue,
-                                            Ok(_) => Yaml::Real(v.clone())
-                                        }
-                                    },
-                                    "null" => {
-                                        match v.as_ref() {
-                                            "~" | "null" => Yaml::Null,
-                                            _ => Yaml::BadValue,
-                                        }
-                                    }
-                                    _  => Yaml::String(v.clone()),
+                } else if let Some(TokenType::Tag(ref handle, ref suffix)) = *tag {
+                    // XXX tag:yaml.org,2002:
+                    if handle == "!!" {
+                        match suffix.as_ref() {
+                            "bool" => {
+                                // "true" or "false"
+                                match v.parse::<bool>() {
+                                    Err(_) => Yaml::BadValue,
+                                    Ok(v) => Yaml::Boolean(v)
                                 }
-                            } else {
-                                Yaml::String(v.clone())
+                            },
+                            "int" => {
+                                match v.parse::<i64>() {
+                                    Err(_) => Yaml::BadValue,
+                                    Ok(v) => Yaml::Integer(v)
+                                }
+                            },
+                            "float" => {
+                                match v.parse::<f64>() {
+                                    Err(_) => Yaml::BadValue,
+                                    Ok(_) => Yaml::Real(v.clone())
+                                }
+                            },
+                            "null" => {
+                                match v.as_ref() {
+                                    "~" | "null" => Yaml::Null,
+                                    _ => Yaml::BadValue,
+                                }
                             }
-                        },
-                        // Datatype is not specified, or unrecognized
-                        _ => { Yaml::from_str(v.as_ref()) }
+                            _  => Yaml::String(v.clone()),
+                        }
+                    } else {
+                        Yaml::String(v.clone())
                     }
+                } else {
+                    // Datatype is not specified, or unrecognized
+                    Yaml::from_str(v.as_ref())
                 };
 
                 self.insert_new_node((node, aid));
@@ -245,7 +242,12 @@ impl Yaml {
             _ => None
         }
     }
+}
 
+#[cfg_attr(feature="clippy", allow(should_implement_trait))]
+impl Yaml {
+    // Not implementing FromStr because there is no possibility of Error.
+    // This function falls back to Yaml::String if nothing else matches.
     pub fn from_str(v: &str) -> Yaml {
         if v.starts_with("0x") {
             let n = i64::from_str_radix(&v[2..], 16); 
@@ -259,8 +261,8 @@ impl Yaml {
                 return Yaml::Integer(n.unwrap());
             }
         }
-        if v.starts_with("+") && v[1..].parse::<i64>().is_ok() {
-	    return Yaml::Integer(v[1..].parse::<i64>().unwrap());
+        if v.starts_with('+') && v[1..].parse::<i64>().is_ok() {
+            return Yaml::Integer(v[1..].parse::<i64>().unwrap());
         }
         match v {
             "~" | "null" => Yaml::Null,
@@ -268,8 +270,8 @@ impl Yaml {
             "false" => Yaml::Boolean(false),
             _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
             // try parsing as f64
-            _ if v.parse::<f64>().is_ok() => Yaml::Real(v.to_string()),
-            _ => Yaml::String(v.to_string())
+            _ if v.parse::<f64>().is_ok() => Yaml::Real(v.to_owned()),
+            _ => Yaml::String(v.to_owned())
         }
     }
 }
@@ -279,7 +281,7 @@ impl<'a> Index<&'a str> for Yaml {
     type Output = Yaml;
 
     fn index(&self, idx: &'a str) -> &Yaml {
-        let key = Yaml::String(idx.to_string());
+        let key = Yaml::String(idx.to_owned());
         match self.as_hash() {
             Some(h) => h.get(&key).unwrap_or(&BAD_VALUE),
             None => &BAD_VALUE
@@ -333,7 +335,7 @@ a4:
 a5: 'single_quoted'
 a6: \"double_quoted\"
 a7: 你好
-".to_string();
+".to_owned();
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
         assert_eq!(doc["a7"].as_str().unwrap(), "你好");

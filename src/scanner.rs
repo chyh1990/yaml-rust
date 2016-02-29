@@ -45,7 +45,7 @@ impl ScanError {
     pub fn new(loc: Marker, info: &str) -> ScanError {
         ScanError {
             mark: loc,
-            info: info.to_string()
+            info: info.to_owned()
         }
     }
 }
@@ -71,30 +71,30 @@ impl fmt::Display for ScanError {
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub enum TokenType {
     NoToken,
-    StreamStartToken(TEncoding),
-    StreamEndToken,
+    StreamStart(TEncoding),
+    StreamEnd,
     /// major, minor
-    VersionDirectiveToken(u32, u32),
+    VersionDirective(u32, u32),
     /// handle, prefix
-    TagDirectiveToken(String, String),
-    DocumentStartToken,
-    DocumentEndToken,
-    BlockSequenceStartToken,
-    BlockMappingStartToken,
-    BlockEndToken,
-    FlowSequenceStartToken,
-    FlowSequenceEndToken,
-    FlowMappingStartToken,
-    FlowMappingEndToken,
-    BlockEntryToken,
-    FlowEntryToken,
-    KeyToken,
-    ValueToken,
-    AliasToken(String),
-    AnchorToken(String),
+    TagDirective(String, String),
+    DocumentStart,
+    DocumentEnd,
+    BlockSequenceStart,
+    BlockMappingStart,
+    BlockEnd,
+    FlowSequenceStart,
+    FlowSequenceEnd,
+    FlowMappingStart,
+    FlowMappingEnd,
+    BlockEntry,
+    FlowEntry,
+    Key,
+    Value,
+    Alias(String),
+    Anchor(String),
     /// handle, suffix
-    TagToken(String, String),
-    ScalarToken(TScalarStyle, String)
+    Tag(String, String),
+    Scalar(TScalarStyle, String)
 }
 
 #[derive(Clone, PartialEq, Debug, Eq)]
@@ -233,7 +233,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn lookahead(&mut self, count: usize) {
         if self.buffer.len() >= count {
             return;
@@ -348,7 +348,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             && self.buffer[1] == '-'
             && self.buffer[2] == '-'
             && is_blankz(self.buffer[3]) {
-            try!(self.fetch_document_indicator(TokenType::DocumentStartToken));
+            try!(self.fetch_document_indicator(TokenType::DocumentStart));
             return Ok(());
         }
 
@@ -357,17 +357,17 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             && self.buffer[1] == '.'
             && self.buffer[2] == '.'
             && is_blankz(self.buffer[3]) {
-            try!(self.fetch_document_indicator(TokenType::DocumentEndToken));
+            try!(self.fetch_document_indicator(TokenType::DocumentEnd));
             return Ok(());
         }
 
         let c = self.buffer[0];
         let nc = self.buffer[1];
         match c {
-            '[' => self.fetch_flow_collection_start(TokenType::FlowSequenceStartToken),
-            '{' => self.fetch_flow_collection_start(TokenType::FlowMappingStartToken),
-            ']' => self.fetch_flow_collection_end(TokenType::FlowSequenceEndToken),
-            '}' => self.fetch_flow_collection_end(TokenType::FlowMappingEndToken),
+            '[' => self.fetch_flow_collection_start(TokenType::FlowSequenceStart),
+            '{' => self.fetch_flow_collection_start(TokenType::FlowMappingStart),
+            ']' => self.fetch_flow_collection_end(TokenType::FlowSequenceEnd),
+            '}' => self.fetch_flow_collection_end(TokenType::FlowMappingEnd),
             ',' => self.fetch_flow_entry(),
             '-' if is_blankz(nc) => self.fetch_block_entry(),
             '?' if self.flow_level > 0 || is_blankz(nc) => self.fetch_key(),
@@ -386,7 +386,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             // plain scalar
             '-' if !is_blankz(nc) => self.fetch_plain_scalar(),
             ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => self.fetch_plain_scalar(),
-            '%' | '@' | '`' => return Err(ScanError::new(self.mark,
+            '%' | '@' | '`' => Err(ScanError::new(self.mark,
                     &format!("unexpected character: `{}'", c))),
             _ => self.fetch_plain_scalar(),
         }
@@ -404,9 +404,8 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.token_available = false;
         self.tokens_parsed += 1;
 
-        match t.1 {
-            TokenType::StreamEndToken => self.stream_end_produced = true,
-            _ => {}
+        if let TokenType::StreamEnd = t.1 {
+            self.stream_end_produced = true;
         }
         Ok(Some(t))
     }
@@ -473,7 +472,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.indent = -1;
         self.stream_start_produced = true;
         self.allow_simple_key();
-        self.tokens.push_back(Token(mark, TokenType::StreamStartToken(TEncoding::Utf8)));
+        self.tokens.push_back(Token(mark, TokenType::StreamStart(TEncoding::Utf8)));
         self.simple_keys.push(SimpleKey::new(Marker::new(0,0,0)));
     }
 
@@ -488,7 +487,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         try!(self.remove_simple_key());
         self.disallow_simple_key();
 
-        self.tokens.push_back(Token(self.mark, TokenType::StreamEndToken));
+        self.tokens.push_back(Token(self.mark, TokenType::StreamEnd));
         Ok(())
     }
 
@@ -526,7 +525,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                     self.lookahead(1);
                 }
                 // XXX return an empty TagDirective token
-                Token(start_mark, TokenType::TagDirectiveToken(String::new(), String::new()))
+                Token(start_mark, TokenType::TagDirective(String::new(), String::new()))
                 // return Err(ScanError::new(start_mark,
                 //     "while scanning a directive, found unknown directive name"))
             }
@@ -578,7 +577,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
         let minor = try!(self.scan_version_directive_number(mark));
 
-        Ok(Token(*mark, TokenType::VersionDirectiveToken(major, minor)))
+        Ok(Token(*mark, TokenType::VersionDirective(major, minor)))
     }
 
     fn scan_directive_name(&mut self) -> Result<String, ScanError> {
@@ -652,7 +651,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             Err(ScanError::new(*mark,
                 "while scanning TAG, did not find expected whitespace or line break"))
         } else {
-            Ok(Token(*mark, TokenType::TagDirectiveToken(handle, prefix)))
+            Ok(Token(*mark, TokenType::TagDirective(handle, prefix)))
         }
     }
 
@@ -697,12 +696,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 suffix = try!(self.scan_tag_uri(false, secondary, &String::new(), &start_mark));
             } else {
                 suffix = try!(self.scan_tag_uri(false, false, &handle, &start_mark));
-                handle = "!".to_string();
+                handle = "!".to_owned();
                 // A special case: the '!' tag.  Set the handle to '' and the
                 // suffix to '!'.
-                if suffix.len() == 0 {
+                if suffix.is_empty() {
                     handle.clear();
-                    suffix = "!".to_string();
+                    suffix = "!".to_owned();
                 }
             }
         }
@@ -710,7 +709,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.lookahead(1);
         if is_blankz(self.ch()) {
             // XXX: ex 7.2, an empty scalar can follow a secondary tag
-            Ok(Token(start_mark, TokenType::TagToken(handle, suffix)))
+            Ok(Token(start_mark, TokenType::Tag(handle, suffix)))
         } else {
             Err(ScanError::new(start_mark,
                 "while scanning a tag, did not find expected whitespace or line break"))
@@ -739,20 +738,18 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         if self.ch() == '!' {
             string.push(self.ch());
             self.skip();
-        } else {
+        } else if directive && string != "!" {
             // It's either the '!' tag or not really a tag handle.  If it's a %TAG
             // directive, it's an error.  If it's a tag token, it must be a part of
             // URI.
-            if directive && string != "!" {
-                return Err(ScanError::new(*mark,
-                    "while parsing a tag directive, did not find expected '!'"));
-            }
+            return Err(ScanError::new(*mark,
+                "while parsing a tag directive, did not find expected '!'"));
         }
         Ok(string)
     }
 
     fn scan_tag_uri(&mut self, directive: bool, _is_secondary: bool,
-                head: &String, mark: &Marker) -> Result<String, ScanError> {
+                head: &str, mark: &Marker) -> Result<String, ScanError> {
         let mut length = head.len();
         let mut string = String::new();
 
@@ -883,9 +880,9 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
 
         if alias {
-            Ok(Token(start_mark, TokenType::AliasToken(string)))
+            Ok(Token(start_mark, TokenType::Alias(string)))
         } else {
-            Ok(Token(start_mark, TokenType::AnchorToken(string)))
+            Ok(Token(start_mark, TokenType::Anchor(string)))
         }
     }
 
@@ -924,7 +921,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let start_mark = self.mark;
         self.skip();
 
-        self.tokens.push_back(Token(start_mark, TokenType::FlowEntryToken));
+        self.tokens.push_back(Token(start_mark, TokenType::FlowEntry));
         Ok(())
     }
 
@@ -949,7 +946,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
             let mark = self.mark;
             // generate BLOCK-SEQUENCE-START if indented
-            self.roll_indent(mark.col, None, TokenType::BlockSequenceStartToken, mark);
+            self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
         } else {
             // - * only allowed in block
             unreachable!();
@@ -960,7 +957,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let start_mark = self.mark;
         self.skip();
 
-        self.tokens.push_back(Token(start_mark, TokenType::BlockEntryToken));
+        self.tokens.push_back(Token(start_mark, TokenType::BlockEntry));
         Ok(())
     }
 
@@ -1119,9 +1116,9 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
 
         if literal {
-            Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::Literal, string)))
+            Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::Literal, string)))
         } else {
-            Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::Foled, string)))
+            Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::Foled, string)))
         }
     }
 
@@ -1353,9 +1350,9 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         self.skip();
 
         if single {
-            Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::SingleQuoted, string)))
+            Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::SingleQuoted, string)))
         } else {
-            Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::DoubleQuoted, string)))
+            Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::DoubleQuoted, string)))
         }
     }
 
@@ -1477,7 +1474,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             self.allow_simple_key();
         }
 
-        Ok(Token(start_mark, TokenType::ScalarToken(TScalarStyle::Plain, string)))
+        Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::Plain, string)))
     }
 
     fn fetch_key(&mut self) -> ScanResult {
@@ -1488,7 +1485,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 return Err(ScanError::new(self.mark, "mapping keys are not allowed in this context"));
             }
             self.roll_indent(start_mark.col, None,
-                TokenType::BlockMappingStartToken, start_mark);
+                TokenType::BlockMappingStart, start_mark);
         }
 
         try!(self.remove_simple_key());
@@ -1500,7 +1497,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         }
 
         self.skip();
-        self.tokens.push_back(Token(start_mark, TokenType::KeyToken));
+        self.tokens.push_back(Token(start_mark, TokenType::Key));
         Ok(())
     }
 
@@ -1509,13 +1506,13 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         let start_mark = self.mark;
         if sk.possible {
             // insert simple key
-            let tok = Token(sk.mark, TokenType::KeyToken);
+            let tok = Token(sk.mark, TokenType::Key);
             let tokens_parsed = self.tokens_parsed;
             self.insert_token(sk.token_number - tokens_parsed, tok);
 
             // Add the BLOCK-MAPPING-START token if needed.
             self.roll_indent(sk.mark.col, Some(sk.token_number),
-                TokenType::BlockMappingStartToken, start_mark);
+                TokenType::BlockMappingStart, start_mark);
 
             self.simple_keys.last_mut().unwrap().possible = false;
             self.disallow_simple_key();
@@ -1528,7 +1525,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 }
 
                 self.roll_indent(start_mark.col, None,
-                    TokenType::BlockMappingStartToken, start_mark);
+                    TokenType::BlockMappingStart, start_mark);
             }
 
             if self.flow_level == 0 {
@@ -1538,7 +1535,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             }
         }
         self.skip();
-        self.tokens.push_back(Token(start_mark, TokenType::ValueToken));
+        self.tokens.push_back(Token(start_mark, TokenType::Value));
 
         Ok(())
     }
@@ -1565,7 +1562,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             return;
         }
         while self.indent > col {
-            self.tokens.push_back(Token(self.mark, TokenType::BlockEndToken));
+            self.tokens.push_back(Token(self.mark, TokenType::BlockEnd));
             self.indent = self.indents.pop().unwrap();
         }
     }
@@ -1588,10 +1585,8 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
     fn remove_simple_key(&mut self) -> ScanResult {
         let last = self.simple_keys.last_mut().unwrap();
-        if last.possible {
-            if last.required {
-                return Err(ScanError::new(self.mark, "simple key expected"));
-            }
+        if last.possible && last.required {
+            return Err(ScanError::new(self.mark, "simple key expected"));
         }
 
         last.possible = false;
@@ -1620,7 +1615,7 @@ macro_rules! next_scalar {
     ($p:ident, $tk:expr, $v:expr) => {{
         let tok = $p.next().unwrap();
         match tok.1 {
-            ScalarToken(style, ref v) => {
+            Scalar(style, ref v) => {
                 assert_eq!(style, $tk);
                 assert_eq!(v, $v);
             },
@@ -1640,8 +1635,8 @@ macro_rules! end {
     fn test_empty() {
         let s = "";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, StreamEndToken);
+        next!(p, StreamStart(..));
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1649,9 +1644,9 @@ macro_rules! end {
     fn test_scalar() {
         let s = "a scalar";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, ScalarToken(TScalarStyle::Plain, _));
-        next!(p, StreamEndToken);
+        next!(p, StreamStart(..));
+        next!(p, Scalar(TScalarStyle::Plain, _));
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1663,11 +1658,11 @@ macro_rules! end {
 ...
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, DocumentStartToken);
-        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
-        next!(p, DocumentEndToken);
-        next!(p, StreamEndToken);
+        next!(p, StreamStart(..));
+        next!(p, DocumentStart);
+        next!(p, Scalar(TScalarStyle::SingleQuoted, _));
+        next!(p, DocumentEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1682,13 +1677,13 @@ macro_rules! end {
 'a scalar'
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
-        next!(p, DocumentStartToken);
-        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
-        next!(p, DocumentStartToken);
-        next!(p, ScalarToken(TScalarStyle::SingleQuoted, _));
-        next!(p, StreamEndToken);
+        next!(p, StreamStart(..));
+        next!(p, Scalar(TScalarStyle::SingleQuoted, _));
+        next!(p, DocumentStart);
+        next!(p, Scalar(TScalarStyle::SingleQuoted, _));
+        next!(p, DocumentStart);
+        next!(p, Scalar(TScalarStyle::SingleQuoted, _));
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1696,15 +1691,15 @@ macro_rules! end {
     fn test_a_flow_sequence() {
         let s = "[item 1, item 2, item 3]";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, FlowSequenceStartToken);
+        next!(p, StreamStart(..));
+        next!(p, FlowSequenceStart);
         next_scalar!(p, TScalarStyle::Plain, "item 1");
-        next!(p, FlowEntryToken);
-        next!(p, ScalarToken(TScalarStyle::Plain, _));
-        next!(p, FlowEntryToken);
-        next!(p, ScalarToken(TScalarStyle::Plain, _));
-        next!(p, FlowSequenceEndToken);
-        next!(p, StreamEndToken);
+        next!(p, FlowEntry);
+        next!(p, Scalar(TScalarStyle::Plain, _));
+        next!(p, FlowEntry);
+        next!(p, Scalar(TScalarStyle::Plain, _));
+        next!(p, FlowSequenceEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1718,20 +1713,20 @@ macro_rules! end {
 }
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, FlowMappingStartToken);
-        next!(p, KeyToken);
-        next!(p, ScalarToken(TScalarStyle::Plain, _));
-        next!(p, ValueToken);
-        next!(p, ScalarToken(TScalarStyle::Plain, _));
-        next!(p, FlowEntryToken);
-        next!(p, KeyToken);
+        next!(p, StreamStart(..));
+        next!(p, FlowMappingStart);
+        next!(p, Key);
+        next!(p, Scalar(TScalarStyle::Plain, _));
+        next!(p, Value);
+        next!(p, Scalar(TScalarStyle::Plain, _));
+        next!(p, FlowEntry);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "a complex key");
-        next!(p, ValueToken);
-        next!(p, ScalarToken(TScalarStyle::Plain, _));
-        next!(p, FlowEntryToken);
-        next!(p, FlowMappingEndToken);
-        next!(p, StreamEndToken);
+        next!(p, Value);
+        next!(p, Scalar(TScalarStyle::Plain, _));
+        next!(p, FlowEntry);
+        next!(p, FlowMappingEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1749,32 +1744,32 @@ macro_rules! end {
   key 2: value 2
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
+        next!(p, StreamStart(..));
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 1");
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 2");
-        next!(p, BlockEntryToken);
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 3.1");
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 3.2");
-        next!(p, BlockEndToken);
-        next!(p, BlockEntryToken);
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, BlockEnd);
+        next!(p, BlockEntry);
+        next!(p, BlockMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key 1");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "value 1");
-        next!(p, KeyToken);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key 2");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "value 2");
-        next!(p, BlockEndToken);
-        next!(p, BlockEndToken);
-        next!(p, StreamEndToken);
+        next!(p, BlockEnd);
+        next!(p, BlockEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1793,40 +1788,40 @@ a sequence:
   - item 2
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, ValueToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, KeyToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, ValueToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, KeyToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, ValueToken); // libyaml comment seems to be wrong
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, ValueToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, KeyToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, ValueToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, BlockEndToken);
-        next!(p, KeyToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, ValueToken);
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, BlockEntryToken);
-        next!(p, ScalarToken(_, _));
-        next!(p, BlockEndToken);
-        next!(p, BlockEndToken);
-        next!(p, StreamEndToken);
+        next!(p, StreamStart(..));
+        next!(p, BlockMappingStart);
+        next!(p, Key);
+        next!(p, Scalar(_, _));
+        next!(p, Value);
+        next!(p, Scalar(_, _));
+        next!(p, Key);
+        next!(p, Scalar(_, _));
+        next!(p, Value);
+        next!(p, Scalar(_, _));
+        next!(p, Key);
+        next!(p, Scalar(_, _));
+        next!(p, Value); // libyaml comment seems to be wrong
+        next!(p, BlockMappingStart);
+        next!(p, Key);
+        next!(p, Scalar(_, _));
+        next!(p, Value);
+        next!(p, Scalar(_, _));
+        next!(p, Key);
+        next!(p, Scalar(_, _));
+        next!(p, Value);
+        next!(p, Scalar(_, _));
+        next!(p, BlockEnd);
+        next!(p, Key);
+        next!(p, Scalar(_, _));
+        next!(p, Value);
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
+        next!(p, Scalar(_, _));
+        next!(p, BlockEntry);
+        next!(p, Scalar(_, _));
+        next!(p, BlockEnd);
+        next!(p, BlockEnd);
+        next!(p, StreamEnd);
         end!(p);
 
     }
@@ -1840,17 +1835,17 @@ key:
 - item 2
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, StreamStart(..));
+        next!(p, BlockMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key");
-        next!(p, ValueToken);
-        next!(p, BlockEntryToken);
+        next!(p, Value);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 1");
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 2");
-        next!(p, BlockEndToken);
-        next!(p, StreamEndToken);
+        next!(p, BlockEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1866,35 +1861,35 @@ key:
   : complex value
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
+        next!(p, StreamStart(..));
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 1");
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 2");
-        next!(p, BlockEndToken);
-        next!(p, BlockEntryToken);
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, BlockEnd);
+        next!(p, BlockEntry);
+        next!(p, BlockMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key 1");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "value 1");
-        next!(p, KeyToken);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key 2");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "value 2");
-        next!(p, BlockEndToken);
-        next!(p, BlockEntryToken);
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, BlockEnd);
+        next!(p, BlockEntry);
+        next!(p, BlockMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "complex key");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "complex value");
-        next!(p, BlockEndToken);
-        next!(p, BlockEndToken);
-        next!(p, StreamEndToken);
+        next!(p, BlockEnd);
+        next!(p, BlockEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1910,32 +1905,32 @@ key:
   key 2: value 2
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, StreamStart(..));
+        next!(p, BlockMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "a sequence");
-        next!(p, ValueToken);
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
+        next!(p, Value);
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 1");
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "item 2");
-        next!(p, BlockEndToken);
-        next!(p, KeyToken);
+        next!(p, BlockEnd);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "a mapping");
-        next!(p, ValueToken);
-        next!(p, BlockMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, Value);
+        next!(p, BlockMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key 1");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "value 1");
-        next!(p, KeyToken);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "key 2");
-        next!(p, ValueToken);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "value 2");
-        next!(p, BlockEndToken);
-        next!(p, BlockEndToken);
-        next!(p, StreamEndToken);
+        next!(p, BlockEnd);
+        next!(p, BlockEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1949,17 +1944,17 @@ key:
 }
 ";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, FlowMappingStartToken);
-        next!(p, KeyToken);
+        next!(p, StreamStart(..));
+        next!(p, FlowMappingStart);
+        next!(p, Key);
         next_scalar!(p, TScalarStyle::Plain, "foo");
-        next!(p, ValueToken);
-        next!(p, FlowEntryToken);
-        next!(p, ValueToken);
+        next!(p, Value);
+        next!(p, FlowEntry);
+        next!(p, Value);
         next_scalar!(p, TScalarStyle::Plain, "bar");
-        next!(p, FlowEntryToken);
-        next!(p, FlowMappingEndToken);
-        next!(p, StreamEndToken);
+        next!(p, FlowEntry);
+        next!(p, FlowMappingEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 
@@ -1967,15 +1962,15 @@ key:
     fn test_scanner_cr() {
         let s = "---\r\n- tok1\r\n- tok2";
         let mut p = Scanner::new(s.chars());
-        next!(p, StreamStartToken(..));
-        next!(p, DocumentStartToken);
-        next!(p, BlockSequenceStartToken);
-        next!(p, BlockEntryToken);
+        next!(p, StreamStart(..));
+        next!(p, DocumentStart);
+        next!(p, BlockSequenceStart);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "tok1");
-        next!(p, BlockEntryToken);
+        next!(p, BlockEntry);
         next_scalar!(p, TScalarStyle::Plain, "tok2");
-        next!(p, BlockEndToken);
-        next!(p, StreamEndToken);
+        next!(p, BlockEnd);
+        next!(p, StreamEnd);
         end!(p);
     }
 

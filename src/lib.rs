@@ -36,6 +36,12 @@
 //!
 //! ```
 
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature="clippy", deny(clippy))]
+#![cfg_attr(feature="clippy", warn(cyclomatic_complexity))]
+#![cfg_attr(feature="clippy", allow(match_same_arms))]
+
 pub mod yaml;
 pub mod scanner;
 pub mod parser;
@@ -89,7 +95,7 @@ mod tests {
             emitter.dump(doc).unwrap();
         }
 
-        assert!(writer.len() > 0);
+        assert!(!writer.is_empty());
     }
 
     fn try_fail(s: &str) -> Result<Vec<Yaml>, ScanError> {

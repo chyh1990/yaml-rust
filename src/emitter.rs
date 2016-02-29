@@ -114,8 +114,8 @@ impl<'a> YamlEmitter<'a> {
     }
 
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
-        match node {
-            &Yaml::Array(ref v) => {
+        match *node {
+            Yaml::Array(ref v) => {
                 if v.is_empty() {
                     try!(write!(self.writer, "[]"));
                     Ok(())
@@ -124,21 +124,19 @@ impl<'a> YamlEmitter<'a> {
                         try!(write!(self.writer, "\n"));
                     }
                     self.level += 1;
-                    let mut cnt = 0usize;
-                    for x in v {
+                    for (cnt, x) in v.iter().enumerate() {
+                        if cnt > 0 {
+                            try!(write!(self.writer, "\n"));
+                        }
                         try!(self.write_indent());
                         try!(write!(self.writer, "- "));
                         try!(self.emit_node(x));
-                        cnt += 1;
-                        if cnt < v.len() {
-                            try!(write!(self.writer, "\n"));
-                        }
                     }
                     self.level -= 1;
                     Ok(())
                 }
             },
-            &Yaml::Hash(ref h) => {
+            Yaml::Hash(ref h) => {
                 if h.is_empty() {
                     try!(self.writer.write_str("{}"));
                     Ok(())
@@ -147,32 +145,30 @@ impl<'a> YamlEmitter<'a> {
                         try!(write!(self.writer, "\n"));
                     }
                     self.level += 1;
-                    let mut cnt = 0usize;
-                    for (k, v) in h {
+                    for (cnt, (k, v)) in h.iter().enumerate() {
+                        if cnt > 0 {
+                            try!(write!(self.writer, "\n"));
+                        }
                         try!(self.write_indent());
-                        match k {
+                        match *k {
                             // complex key is not supported
-                            &Yaml::Array(_) | &Yaml::Hash(_) => {
+                            Yaml::Array(_) | Yaml::Hash(_) => {
                                 return Err(EmitError::BadHashmapKey);
                             },
                             _ => { try!(self.emit_node(k)); }
                         }
                         try!(write!(self.writer, ": "));
                         try!(self.emit_node(v));
-                        cnt += 1;
-                        if cnt < h.len() {
-                            try!(write!(self.writer, "\n"));
-                        }
                     }
                     self.level -= 1;
                     Ok(())
                 }
             },
-            &Yaml::String(ref v) => {
+            Yaml::String(ref v) => {
                 try!(escape_str(self.writer, v));
                 Ok(())
             },
-            &Yaml::Boolean(v) => {
+            Yaml::Boolean(v) => {
                 if v {
                     try!(self.writer.write_str("true"));
                 } else {
@@ -180,15 +176,15 @@ impl<'a> YamlEmitter<'a> {
                 }
                 Ok(())
             },
-            &Yaml::Integer(v) => {
+            Yaml::Integer(v) => {
                 try!(write!(self.writer, "{}", v));
                 Ok(())
             },
-            &Yaml::Real(ref v) => {
+            Yaml::Real(ref v) => {
                 try!(write!(self.writer, "{}", v));
                 Ok(())
             },
-            &Yaml::Null | &Yaml::BadValue => {
+            Yaml::Null | Yaml::BadValue => {
                 try!(write!(self.writer, "~"));
                 Ok(())
             },
