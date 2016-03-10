@@ -4,6 +4,8 @@ The missing YAML 1.2 implementation for Rust.
 
 [![Build Status](https://travis-ci.org/chyh1990/yaml-rust.svg?branch=master)](https://travis-ci.org/chyh1990/yaml-rust)
 [![Build status](https://ci.appveyor.com/api/projects/status/scf47535ckp4ylg4?svg=true)](https://ci.appveyor.com/project/chyh1990/yaml-rust)
+[![license](https://img.shields.io/crates/l/yaml-rust.svg)](https://crates.io/crates/yaml-rust/)
+[![version](https://img.shields.io/crates/v/yaml-rust.svg)](https://crates.io/crates/yaml-rust/)
 
 `yaml-rust` is a pure Rust YAML 1.2 implementation without
 any FFI and crate dependencies, which enjoys the memory safe 
