@@ -647,11 +647,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
         self.lookahead(1);
 
-        if !is_blankz(self.ch()) {
+        if is_blankz(self.ch()) {
+            Ok(Token(*mark, TokenType::TagDirective(handle, prefix)))
+        } else {
             Err(ScanError::new(*mark,
                 "while scanning TAG, did not find expected whitespace or line break"))
-        } else {
-            Ok(Token(*mark, TokenType::TagDirective(handle, prefix)))
         }
     }
 
@@ -1305,39 +1305,39 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             while is_blank(self.ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
                     // Consume a space or a tab character.
-                    if !leading_blanks {
-                        whitespaces.push(self.ch());
+                    if leading_blanks {
                         self.skip();
                     } else {
+                        whitespaces.push(self.ch());
                         self.skip();
                     }
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break.
-                    if !leading_blanks {
+                    if leading_blanks {
+                        self.read_break(&mut trailing_breaks);
+                    } else {
                         whitespaces.clear();
                         self.read_break(&mut leading_break);
                         leading_blanks = true;
-                    } else {
-                        self.read_break(&mut trailing_breaks);
                     }
                 }
                 self.lookahead(1);
             }
             // Join the whitespaces or fold line breaks.
             if leading_blanks {
-                if !leading_break.is_empty() {
+                if leading_break.is_empty() {
+                    string.extend(leading_break.chars());
+                    string.extend(trailing_breaks.chars());
+                    trailing_breaks.clear();
+                    leading_break.clear();
+                } else {
                     if trailing_breaks.is_empty() {
                         string.push(' ');
                     } else {
                         string.extend(trailing_breaks.chars());
                         trailing_breaks.clear();
                     }
-                    leading_break.clear();
-                } else {
-                    string.extend(leading_break.chars());
-                    string.extend(trailing_breaks.chars());
-                    trailing_breaks.clear();
                     leading_break.clear();
                 }
             } else {
@@ -1407,7 +1407,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
                 if leading_blanks || !whitespaces.is_empty() {
                     if leading_blanks {
-                        if !leading_break.is_empty() {
+                        if leading_break.is_empty() {
+                            string.extend(leading_break.chars());
+                            string.extend(trailing_breaks.chars());
+                            trailing_breaks.clear();
+                            leading_break.clear();
+                        } else {
                             if trailing_breaks.is_empty() {
                                 string.push(' ');
                             } else {
@@ -1415,11 +1420,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                                 trailing_breaks.clear();
                             }
                             leading_break.clear();
-                        } else {
-                            string.extend(leading_break.chars());
-                            string.extend(trailing_breaks.chars());
-                            trailing_breaks.clear();
-                            leading_break.clear();
+
                         }
                         leading_blanks = false;
                     } else {
@@ -1444,21 +1445,21 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                                 "while scanning a plain scalar, found a tab"));
                     }
 
-                    if !leading_blanks {
-                        whitespaces.push(self.ch());
+                    if leading_blanks {
                         self.skip();
                     } else {
+                        whitespaces.push(self.ch());
                         self.skip();
                     }
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break
-                    if !leading_blanks {
+                    if leading_blanks {
+                        self.read_break(&mut trailing_breaks);
+                    } else {
                         whitespaces.clear();
                         self.read_break(&mut leading_break);
                         leading_blanks = true;
-                    } else {
-                        self.read_break(&mut trailing_breaks);
                     }
                 }
                 self.lookahead(1);

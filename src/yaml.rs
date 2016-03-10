@@ -154,7 +154,9 @@ impl YamlLoader {
         if node.1 > 0 {
             self.anchor_map.insert(node.1, node.0.clone());
         }
-        if !self.doc_stack.is_empty() {
+        if self.doc_stack.is_empty() {
+            self.doc_stack.push(node);
+        } else {
             let parent = self.doc_stack.last_mut().unwrap();
             match *parent {
                 (Yaml::Array(ref mut v), _) => v.push(node.0),
@@ -172,8 +174,6 @@ impl YamlLoader {
                 },
                 _ => unreachable!(),
             }
-        } else {
-            self.doc_stack.push(node);
         }
     }
 
