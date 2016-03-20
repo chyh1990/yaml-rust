@@ -23,7 +23,7 @@ use scanner::{TScalarStyle, ScanError, TokenType};
 ///     assert!(v.as_i64().is_some());
 /// }
 /// ```
-#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
 pub enum Yaml {
     /// Float types are stored as String and parsed on demand.
     /// Note that f64 does NOT implement Eq trait and can NOT be stored in BTreeMap.
@@ -37,6 +37,15 @@ pub enum Yaml {
     /// YAML array, can be accessed as a `Vec`.
     Array(self::Array),
     /// YAML hash, can be accessed as a `BTreeMap`.
+    ///
+    /// If the order of keys is meaningful, enable the `preserve_order` feature to
+    /// store hashes as a `LinkedHashMap` intead of `BTreeMap`. When using a
+    /// `LinkedHashMap`, the itertion order will match the order of insertion into
+    /// the map.
+    ///
+    /// ```toml
+    /// yaml-rust = { version = "*", features = ["preserve_order"] }
+    /// ```
     Hash(self::Hash),
     /// Alias, not fully supported yet.
     Alias(usize),
@@ -49,7 +58,11 @@ pub enum Yaml {
 }
 
 pub type Array = Vec<Yaml>;
+
+#[cfg(not(feature = "preserve_order"))]
 pub type Hash = BTreeMap<Yaml, Yaml>;
+#[cfg(feature = "preserve_order")]
+pub type Hash = ::linked_hash_map::LinkedHashMap<Yaml, Yaml>;
 
 pub struct YamlLoader {
     docs: Vec<Yaml>,

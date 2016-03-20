@@ -8,5 +8,9 @@ license = "MIT/Apache-2.0"
 description = "The missing YAML 1.2 parser for rust"
 repository = "https://github.com/chyh1990/yaml-rust"
 
+[features]
+preserve_order = ["linked-hash-map"]
+
 [dependencies]
 clippy = { version = "^0.*", optional = true }
+linked-hash-map = { version = "0.0.9", optional = true }
