@@ -124,8 +124,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
     fn parse<R: EventReceiver>(&mut self, recv: &mut R)
         -> ParseResult {
-        if self.scanner.stream_ended()
-            || self.state == State::End {
+        if self.state == State::End {
             return Ok(Event::StreamEnd);
         }
         let ev = try!(self.state_machine());

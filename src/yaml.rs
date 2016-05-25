@@ -332,6 +332,14 @@ c: [1, 2]
     }
 
     #[test]
+    fn test_empty_doc() {
+        let s: String = "".to_owned();
+        YamlLoader::load_from_str(&s).unwrap();
+        let s: String = "---".to_owned();
+        assert_eq!(YamlLoader::load_from_str(&s).unwrap()[0], Yaml::Null);
+    }
+
+    #[test]
     fn test_parser() {
         let s: String = "
 # comment
