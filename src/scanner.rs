@@ -1191,12 +1191,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             self.lookahead(4);
 
             if self.mark.col == 0 &&
-                ((self.buffer[0] == '-') &&
+                (((self.buffer[0] == '-') &&
                 (self.buffer[1] == '-') &&
                 (self.buffer[2] == '-')) ||
                 ((self.buffer[0] == '.') &&
                 (self.buffer[1] == '.') &&
-                (self.buffer[2] == '.')) &&
+                (self.buffer[2] == '.'))) &&
                 is_blankz(self.buffer[3]) {
                     return Err(ScanError::new(start_mark,
                         "while scanning a quoted scalar, found unexpected document indicator"));
@@ -1381,12 +1381,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             self.lookahead(4);
 
             if self.mark.col == 0 &&
-                ((self.buffer[0] == '-') &&
+                (((self.buffer[0] == '-') &&
                  (self.buffer[1] == '-') &&
                  (self.buffer[2] == '-')) ||
                     ((self.buffer[0] == '.') &&
                      (self.buffer[1] == '.') &&
-                     (self.buffer[2] == '.')) &&
+                     (self.buffer[2] == '.'))) &&
                     is_blankz(self.buffer[3]) {
                         break;
                     }

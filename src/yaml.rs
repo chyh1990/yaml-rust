@@ -476,4 +476,12 @@ a1: &DEFAULT
         let s = "{-";
         assert!(YamlLoader::load_from_str(&s).is_err());
     }
+
+    #[test]
+    fn test_bad_docstart() {
+        assert!(YamlLoader::load_from_str("---This used to cause an infinite loop").is_ok());
+        assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
+        assert_eq!(YamlLoader::load_from_str("--- #here goes a comment"), Ok(vec![Yaml::Null]));
+        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))]));
+    }
 }
