@@ -469,4 +469,11 @@ a1: &DEFAULT
         assert!(doc[25][0].as_bool().unwrap());
         assert!(!doc[25][1].as_bool().unwrap());
     }
+
+    #[test]
+    fn test_bad_hypen() {
+        // See: https://github.com/chyh1990/yaml-rust/issues/23
+        let s = "{-";
+        assert!(YamlLoader::load_from_str(&s).is_err());
+    }
 }

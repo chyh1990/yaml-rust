@@ -949,7 +949,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
         } else {
             // - * only allowed in block
-            unreachable!();
+            return Err(ScanError::new(self.mark, r#""-" is only valid inside a block"#))
         }
         try!(self.remove_simple_key());
         self.allow_simple_key();
