@@ -35,7 +35,7 @@ enum State {
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub enum Event {
     /// Reserved for internal use
-    NoEvent,
+    Nothing,
     StreamStart,
     StreamEnd,
     DocumentStart,
