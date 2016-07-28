@@ -58,8 +58,8 @@ impl Event {
         Event::Scalar("~".to_owned(), TScalarStyle::Plain, 0, None)
     }
 
-    fn empty_scalar_with_anchor(anchor: usize, tag: TokenType) -> Event {
-        Event::Scalar("".to_owned(), TScalarStyle::Plain, anchor, Some(tag))
+    fn empty_scalar_with_anchor(anchor: usize, tag: Option<TokenType>) -> Event {
+        Event::Scalar("".to_owned(), TScalarStyle::Plain, anchor, tag)
     }
 }
 
@@ -453,7 +453,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             // ex 7.2, an empty scalar can follow a secondary tag
             _ if tag.is_some() || anchor_id > 0 => {
                 self.pop_state();
-                Ok(Event::empty_scalar_with_anchor(anchor_id, tag.unwrap()))
+                Ok(Event::empty_scalar_with_anchor(anchor_id, tag))
             },
             _ => { Err(ScanError::new(tok.0, "while parsing a node, did not find expected node content")) }
         }

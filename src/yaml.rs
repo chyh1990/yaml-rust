@@ -404,6 +404,14 @@ a1: &DEFAULT
 
     }
 
+    #[test]
+    fn test_github_27() {
+        // https://github.com/chyh1990/yaml-rust/issues/27
+        let s = "&a";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out[0];
+        assert_eq!(doc.as_str().unwrap(), "");
+    }
 
     #[test]
     fn test_plain_datatype() {
