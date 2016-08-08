@@ -4,6 +4,7 @@ use std::string;
 use std::i64;
 use std::str::FromStr;
 use std::mem;
+use std::vec;
 use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType};
 
@@ -344,21 +345,19 @@ impl IntoIterator for Yaml {
     type IntoIter = YamlIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        let mut yaml = self.into_vec().unwrap_or(vec![]);
-        yaml.reverse();
-        YamlIter {yaml: yaml}
+        YamlIter {yaml: self.into_vec().unwrap_or(vec![]).into_iter()}
     }
 }
 
 pub struct YamlIter {
-    yaml: Vec<Yaml>,
+    yaml: vec::IntoIter<Yaml>,
 }
 
 impl Iterator for YamlIter {
     type Item = Yaml;
 
     fn next(&mut self) -> Option<Yaml> {
-        self.yaml.pop()
+        self.yaml.next()
     }
 }
 
