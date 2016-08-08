@@ -234,7 +234,7 @@ pub fn $name(self) -> Option<$t> {
     }
 }
     );
-); 
+);
 
 impl Yaml {
     define_as!(as_bool, bool, Boolean);
@@ -245,7 +245,7 @@ impl Yaml {
     define_as_ref!(as_vec, &Array, Array);
 
     define_into!(into_bool, bool, Boolean);
-    define_into!(into_i64, i64, Integer); 
+    define_into!(into_i64, i64, Integer);
     define_into!(into_string, String, String);
     define_into!(into_hash, Hash, Hash);
     define_into!(into_vec, Array, Array);
@@ -344,22 +344,21 @@ impl IntoIterator for Yaml {
     type IntoIter = YamlIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        YamlIter {yaml: self, index: 0}
+        let mut yaml = self.into_vec().unwrap_or(vec![]);
+        yaml.reverse();
+        YamlIter {yaml: yaml}
     }
 }
 
 pub struct YamlIter {
-    yaml: Yaml,
-    index: usize,
+    yaml: Vec<Yaml>,
 }
 
 impl Iterator for YamlIter {
     type Item = Yaml;
 
     fn next(&mut self) -> Option<Yaml> {
-        let result = self.yaml[self.index].clone();
-        self.index += 1;
-        Some(result)
+        self.yaml.pop()
     }
 }
 
@@ -540,7 +539,7 @@ a1: &DEFAULT
         assert!(YamlLoader::load_from_str("---This used to cause an infinite loop").is_ok());
         assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
         assert_eq!(YamlLoader::load_from_str("--- #here goes a comment"), Ok(vec![Yaml::Null]));
-        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))])); 
+        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))]));
     }
 
     #[test]
@@ -561,13 +560,13 @@ a1: &DEFAULT
 - !!float 2
 - !!bool true
 - !!bool false
-- 0xFF 
+- 0xFF
 - 0o77
 - +12345
 ";
-        let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter(); 
+        let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
         let mut doc = out.next().unwrap().into_iter();
-        
+
         assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
         assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
         assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
@@ -583,7 +582,7 @@ a1: &DEFAULT
         assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
         assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63); 
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345); 
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
     }
 }
