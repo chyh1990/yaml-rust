@@ -225,6 +225,17 @@ pub fn $name(&self) -> Option<$t> {
     );
 );
 
+macro_rules! define_into (
+    ($name:ident, $t:ty, $yt:ident) => (
+pub fn $name(self) -> Option<$t> {
+    match self {
+        Yaml::$yt(v) => Some(v),
+        _ => None
+    }
+}
+    );
+); 
+
 impl Yaml {
     define_as!(as_bool, bool, Boolean);
     define_as!(as_i64, i64, Integer);
@@ -232,6 +243,12 @@ impl Yaml {
     define_as_ref!(as_str, &str, String);
     define_as_ref!(as_hash, &Hash, Hash);
     define_as_ref!(as_vec, &Array, Array);
+
+    define_into!(into_bool, bool, Boolean);
+    define_into!(into_i64, i64, Integer); 
+    define_into!(into_string, String, String);
+    define_into!(into_hash, Hash, Hash);
+    define_into!(into_vec, Array, Array);
 
     pub fn is_null(&self) -> bool {
         match *self {
@@ -250,6 +267,15 @@ impl Yaml {
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             Yaml::Real(ref v) => {
+                v.parse::<f64>().ok()
+            },
+            _ => None
+        }
+    }
+
+    pub fn into_f64(self) -> Option<f64> {
+        match self {
+            Yaml::Real(v) => {
                 v.parse::<f64>().ok()
             },
             _ => None
@@ -490,6 +516,56 @@ a1: &DEFAULT
         assert!(YamlLoader::load_from_str("---This used to cause an infinite loop").is_ok());
         assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
         assert_eq!(YamlLoader::load_from_str("--- #here goes a comment"), Ok(vec![Yaml::Null]));
-        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))]));
+        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))])); 
+    }
+
+    #[test]
+    fn test_plain_datatype_with_into_methods() {
+        let s =
+"
+- 'string'
+- \"string\"
+- string
+- 123
+- -321
+- 1.23
+- -1e4
+- true
+- false
+- !!str 0
+- !!int 100
+- !!float 2
+- !!bool true
+- !!bool false
+- 0xFF 
+- 0o77
+- [ 0xF, 0xF ]
+- +12345
+- [ true, false ]
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out[0]; 
+        
+        assert_eq!(doc[0].clone().into_string().unwrap(), "string");
+        assert_eq!(doc[1].clone().into_string().unwrap(), "string");
+        assert_eq!(doc[2].clone().into_string().unwrap(), "string");
+        assert_eq!(doc[3].clone().into_i64().unwrap(), 123);
+        assert_eq!(doc[4].clone().into_i64().unwrap(), -321);
+        assert_eq!(doc[5].clone().into_f64().unwrap(), 1.23);
+        assert_eq!(doc[6].clone().into_f64().unwrap(), -1e4);
+        assert_eq!(doc[7].clone().into_bool().unwrap(), true);
+        assert_eq!(doc[8].clone().into_bool().unwrap(), false);
+        assert_eq!(doc[9].clone().into_string().unwrap(), "0");
+        assert_eq!(doc[10].clone().into_i64().unwrap(), 100);
+        assert_eq!(doc[11].clone().into_f64().unwrap(), 2.0);
+        assert_eq!(doc[12].clone().into_bool().unwrap(), true);
+        assert_eq!(doc[13].clone().into_bool().unwrap(), false);
+        assert_eq!(doc[14].clone().into_i64().unwrap(), 255);
+        assert_eq!(doc[15].clone().into_i64().unwrap(), 63);
+        assert_eq!(doc[16][0].clone().into_i64().unwrap(), 15);
+        assert_eq!(doc[16][1].clone().into_i64().unwrap(), 15);
+        assert_eq!(doc[17].clone().into_i64().unwrap(), 12345);
+        assert!(doc[18][0].clone().into_bool().unwrap());
+        assert!(!doc[18][1].clone().into_bool().unwrap());
     }
 }
