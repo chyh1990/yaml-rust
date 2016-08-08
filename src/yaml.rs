@@ -339,6 +339,30 @@ impl Index<usize> for Yaml {
     }
 }
 
+impl IntoIterator for Yaml {
+    type Item = Yaml;
+    type IntoIter = YamlIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        YamlIter {yaml: self, index: 0}
+    }
+}
+
+pub struct YamlIter {
+    yaml: Yaml,
+    index: usize,
+}
+
+impl Iterator for YamlIter {
+    type Item = Yaml;
+
+    fn next(&mut self) -> Option<Yaml> {
+        let result = self.yaml[self.index].clone();
+        self.index += 1;
+        Some(result)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use yaml::*;
@@ -539,33 +563,27 @@ a1: &DEFAULT
 - !!bool false
 - 0xFF 
 - 0o77
-- [ 0xF, 0xF ]
 - +12345
-- [ true, false ]
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
-        let doc = &out[0]; 
+        let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter(); 
+        let mut doc = out.next().unwrap().into_iter();
         
-        assert_eq!(doc[0].clone().into_string().unwrap(), "string");
-        assert_eq!(doc[1].clone().into_string().unwrap(), "string");
-        assert_eq!(doc[2].clone().into_string().unwrap(), "string");
-        assert_eq!(doc[3].clone().into_i64().unwrap(), 123);
-        assert_eq!(doc[4].clone().into_i64().unwrap(), -321);
-        assert_eq!(doc[5].clone().into_f64().unwrap(), 1.23);
-        assert_eq!(doc[6].clone().into_f64().unwrap(), -1e4);
-        assert_eq!(doc[7].clone().into_bool().unwrap(), true);
-        assert_eq!(doc[8].clone().into_bool().unwrap(), false);
-        assert_eq!(doc[9].clone().into_string().unwrap(), "0");
-        assert_eq!(doc[10].clone().into_i64().unwrap(), 100);
-        assert_eq!(doc[11].clone().into_f64().unwrap(), 2.0);
-        assert_eq!(doc[12].clone().into_bool().unwrap(), true);
-        assert_eq!(doc[13].clone().into_bool().unwrap(), false);
-        assert_eq!(doc[14].clone().into_i64().unwrap(), 255);
-        assert_eq!(doc[15].clone().into_i64().unwrap(), 63);
-        assert_eq!(doc[16][0].clone().into_i64().unwrap(), 15);
-        assert_eq!(doc[16][1].clone().into_i64().unwrap(), 15);
-        assert_eq!(doc[17].clone().into_i64().unwrap(), 12345);
-        assert!(doc[18][0].clone().into_bool().unwrap());
-        assert!(!doc[18][1].clone().into_bool().unwrap());
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 123);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), -321);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), 1.23);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), -1e4);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "0");
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 100);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), 2.0);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63); 
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345); 
     }
 }
