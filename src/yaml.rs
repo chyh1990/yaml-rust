@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
 use std::i64;
-use std::str::FromStr;
 use std::mem;
 use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType};
+use emitter::YamlEmitter;
 
 /// A YAML node is stored as this `Yaml` enumeration, which provides an easy way to
 /// access your YAML document.
@@ -310,6 +310,25 @@ impl Index<usize> for Yaml {
             Some(v) => v.get(idx).unwrap_or(&BAD_VALUE),
             None => &BAD_VALUE
         }
+    }
+}
+
+impl<'a> From<&'a Yaml> for String{
+    fn from(yaml:&Yaml) -> String{
+        yaml.to_string()
+    }
+}
+
+impl ToString for Yaml{
+    fn to_string(&self) -> String {
+        let mut buf = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut buf);
+            if emitter.dump(&self).is_err(){
+                return String::from("Error")
+            }
+        }
+        buf
     }
 }
 
