@@ -263,6 +263,7 @@ a7: 你好
 'key 1': \"ddd\\\tbbb\"
 ";
 
+
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
@@ -273,6 +274,39 @@ a7: 你好
         let docs_new = YamlLoader::load_from_str(&s).unwrap();
         let doc_new = &docs_new[0];
 
+        assert_eq!(doc, doc_new);
+    }
+
+    #[test]
+    fn test_emit_complex() {
+        let s = r#"
+cataloge:
+  product: &coffee   { name: Coffee,    price: 2.5  ,  unit: 1l  }
+  product: &cookies  { name: Cookies!,  price: 3.40 ,  unit: 400g}
+
+products:
+  *coffee:
+    amount: 4
+  *cookies:
+    amount: 4
+  [1,2,3,4]:
+    array key
+  2.4:
+    real key
+  true:
+    bool key
+  {}:
+    empty hash key
+            "#;
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
     }
 }
