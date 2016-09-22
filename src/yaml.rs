@@ -4,6 +4,7 @@ use std::string;
 use std::i64;
 use std::str::FromStr;
 use std::mem;
+use std::vec;
 use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType};
 
@@ -225,6 +226,17 @@ pub fn $name(&self) -> Option<$t> {
     );
 );
 
+macro_rules! define_into (
+    ($name:ident, $t:ty, $yt:ident) => (
+pub fn $name(self) -> Option<$t> {
+    match self {
+        Yaml::$yt(v) => Some(v),
+        _ => None
+    }
+}
+    );
+);
+
 impl Yaml {
     define_as!(as_bool, bool, Boolean);
     define_as!(as_i64, i64, Integer);
@@ -232,6 +244,12 @@ impl Yaml {
     define_as_ref!(as_str, &str, String);
     define_as_ref!(as_hash, &Hash, Hash);
     define_as_ref!(as_vec, &Array, Array);
+
+    define_into!(into_bool, bool, Boolean);
+    define_into!(into_i64, i64, Integer);
+    define_into!(into_string, String, String);
+    define_into!(into_hash, Hash, Hash);
+    define_into!(into_vec, Array, Array);
 
     pub fn is_null(&self) -> bool {
         match *self {
@@ -250,6 +268,15 @@ impl Yaml {
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             Yaml::Real(ref v) => {
+                v.parse::<f64>().ok()
+            },
+            _ => None
+        }
+    }
+
+    pub fn into_f64(self) -> Option<f64> {
+        match self {
+            Yaml::Real(v) => {
                 v.parse::<f64>().ok()
             },
             _ => None
@@ -310,6 +337,27 @@ impl Index<usize> for Yaml {
             Some(v) => v.get(idx).unwrap_or(&BAD_VALUE),
             None => &BAD_VALUE
         }
+    }
+}
+
+impl IntoIterator for Yaml {
+    type Item = Yaml;
+    type IntoIter = YamlIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        YamlIter {yaml: self.into_vec().unwrap_or(vec![]).into_iter()}
+    }
+}
+
+pub struct YamlIter {
+    yaml: vec::IntoIter<Yaml>,
+}
+
+impl Iterator for YamlIter {
+    type Item = Yaml;
+
+    fn next(&mut self) -> Option<Yaml> {
+        self.yaml.next()
     }
 }
 
@@ -491,5 +539,49 @@ a1: &DEFAULT
         assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
         assert_eq!(YamlLoader::load_from_str("--- #here goes a comment"), Ok(vec![Yaml::Null]));
         assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))]));
+    }
+
+    #[test]
+    fn test_plain_datatype_with_into_methods() {
+        let s =
+"
+- 'string'
+- \"string\"
+- string
+- 123
+- -321
+- 1.23
+- -1e4
+- true
+- false
+- !!str 0
+- !!int 100
+- !!float 2
+- !!bool true
+- !!bool false
+- 0xFF
+- 0o77
+- +12345
+";
+        let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
+        let mut doc = out.next().unwrap().into_iter();
+
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 123);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), -321);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), 1.23);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), -1e4);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
+        assert_eq!(doc.next().unwrap().into_string().unwrap(), "0");
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 100);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), 2.0);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
+        assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
     }
 }
