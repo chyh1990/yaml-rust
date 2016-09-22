@@ -345,7 +345,10 @@ impl IntoIterator for Yaml {
     type IntoIter = YamlIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        YamlIter {yaml: self.into_vec().unwrap_or(vec![]).into_iter()}
+        YamlIter {
+            yaml: self.into_vec()
+                .unwrap_or_else(Vec::new).into_iter()
+        }
     }
 }
 
