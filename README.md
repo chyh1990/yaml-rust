@@ -87,7 +87,7 @@ bar:
 }
 ```
 
-Note that `yaml::Yaml` implements `Index<&'a str>` & `Index<usize>`:
+Note that `yaml_rust::Yaml` implements `Index<&'a str>` & `Index<usize>`:
 
 * `Index<usize>` assumes the container is an Array
 * `Index<&'a str>` assumes the container is a string to value Map
