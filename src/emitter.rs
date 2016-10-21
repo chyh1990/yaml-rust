@@ -113,6 +113,48 @@ impl<'a> YamlEmitter<'a> {
         Ok(())
     }
 
+    fn emit_node_compact(&mut self, node: &Yaml) -> EmitResult {
+        match *node {
+            Yaml::Array(ref v) => {
+                    try!(write!(self.writer, "["));
+                    if self.level >= 0 {
+                        try!(write!(self.writer, "+ "));
+                    }
+                    self.level += 1;
+                    for (cnt, x) in v.iter().enumerate() {
+                        try!(self.write_indent());
+                        if cnt > 0 { try!(write!(self.writer, ", ")); }
+                        try!(self.emit_node(x));
+                    }
+                    self.level -= 1;
+                    try!(write!(self.writer, "]"));
+                    Ok(())
+            },
+            Yaml::Hash(ref h) => {
+                    try!(self.writer.write_str("{"));
+                    self.level += 1;
+                    for (cnt, (k, v)) in h.iter().enumerate() {
+                        if cnt > 0 {
+                            try!(write!(self.writer, ", "));
+                        }
+                        match *k {
+                            // complex key is not supported
+                            Yaml::Array(_) | Yaml::Hash(_) => {
+                                return Err(EmitError::BadHashmapKey);
+                            },
+                            _ => { try!(self.emit_node(k)); }
+                        }
+                        try!(write!(self.writer, ": "));
+                        try!(self.emit_node(v));
+                    }
+                    try!(self.writer.write_str("}"));
+                    self.level -= 1;
+                    Ok(())
+            },
+            _ => self.emit_node(node)
+        }
+    }
+
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
         match *node {
             Yaml::Array(ref v) => {
@@ -151,9 +193,9 @@ impl<'a> YamlEmitter<'a> {
                         }
                         try!(self.write_indent());
                         match *k {
-                            // complex key is not supported
                             Yaml::Array(_) | Yaml::Hash(_) => {
-                                return Err(EmitError::BadHashmapKey);
+                                try!(self.emit_node_compact(k));
+                                //return Err(EmitError::BadHashmapKey);
                             },
                             _ => { try!(self.emit_node(k)); }
                         }
@@ -221,6 +263,7 @@ a7: 你好
 'key 1': \"ddd\\\tbbb\"
 ";
 
+
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
@@ -231,6 +274,39 @@ a7: 你好
         let docs_new = YamlLoader::load_from_str(&s).unwrap();
         let doc_new = &docs_new[0];
 
+        assert_eq!(doc, doc_new);
+    }
+
+    #[test]
+    fn test_emit_complex() {
+        let s = r#"
+cataloge:
+  product: &coffee   { name: Coffee,    price: 2.5  ,  unit: 1l  }
+  product: &cookies  { name: Cookies!,  price: 3.40 ,  unit: 400g}
+
+products:
+  *coffee:
+    amount: 4
+  *cookies:
+    amount: 4
+  [1,2,3,4]:
+    array key
+  2.4:
+    real key
+  true:
+    bool key
+  {}:
+    empty hash key
+            "#;
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
     }
 }
