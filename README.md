@@ -8,7 +8,7 @@ The missing YAML 1.2 implementation for Rust.
 [![version](https://img.shields.io/crates/v/yaml-rust.svg)](https://crates.io/crates/yaml-rust/)
 
 `yaml-rust` is a pure Rust YAML 1.2 implementation without
-any FFI and crate dependencies, which enjoys the memory safe 
+any external dependencies, which enjoys the memory safety 
 property and other benefits from the Rust language. 
 The parser is heavily influenced by `libyaml` and `yaml-cpp`.
 
@@ -17,14 +17,14 @@ Rust 1.0.0 and nightly!
 
 See [Document](http://chyh1990.github.io/yaml-rust/doc/yaml_rust/)
 
-> NOTE: This library is still under heavily development.
+> NOTE: This library is still under heavy development.
 
 > WARNING: This library needs more tests and it is NOT ready for
 > parsing arbitrary user input from *untrusted source*.
 
 ## Quick Start
 
-Adding the following to the Cargo.toml in your project:
+Add the following to the Cargo.toml of your project:
 
 ```
 [dependencies]
