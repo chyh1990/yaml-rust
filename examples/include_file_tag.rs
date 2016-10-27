@@ -29,7 +29,9 @@ impl<'a> yaml::YamlScalarParser for IncludeParser<'a> {
                 return Some(match File::open(self.root.join(value)){
                     Ok(mut f) => {
                         let _ = f.read_to_string(&mut content);
-                        match yaml::YamlLoader::load_from_str(&content.to_owned()) {
+                        let mut loader = yaml::YamlLoader::new();
+                        loader.register_scalar_parser(self);
+                        match loader.parse_from_str(&content.to_owned()) {
                             Ok(mut docs) => docs.pop().unwrap(),
                             Err(_) => yaml::Yaml::BadValue
                         }
