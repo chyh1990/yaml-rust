@@ -17,7 +17,6 @@ impl From<fmt::Error> for EmitError {
 pub struct YamlEmitter<'a> {
     writer: &'a mut fmt::Write,
     best_indent: usize,
-    avoid_quotes: bool,
 
     level: isize,
 }
@@ -87,39 +86,11 @@ fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
     Ok(())
 }
 
-pub struct YamlEmitterBuilder {
-    avoid_quotes: bool,
-}
-
-impl YamlEmitterBuilder {
-    pub fn new() -> Self {
-        YamlEmitterBuilder {
-            avoid_quotes: false,
-        }
-    }
-
-    pub fn avoid_quotes(mut self) -> Self {
-        self.avoid_quotes = true;
-        self
-    }
-
-    pub fn build<'a>(self, writer: &'a mut fmt::Write) -> YamlEmitter<'a> {
-        YamlEmitter {
-            writer: writer,
-            best_indent: 2,
-            avoid_quotes: self.avoid_quotes,
-
-            level: -1,
-        }
-    }
-}
-
 impl<'a> YamlEmitter<'a> {
     pub fn new(writer: &'a mut fmt::Write) -> YamlEmitter {
         YamlEmitter {
             writer: writer,
             best_indent: 2,
-            avoid_quotes: false,
 
             level: -1
         }
@@ -236,7 +207,7 @@ impl<'a> YamlEmitter<'a> {
                 }
             },
             Yaml::String(ref v) => {
-                if !self.avoid_quotes || need_quotes(v) {
+                if need_quotes(v) {
                     try!(escape_str(self.writer, v));
                 }
                 else {
@@ -400,9 +371,7 @@ y: string with spaces"#;
         let doc = &docs[0];
         let mut writer = String::new();
         {
-            let mut emitter = YamlEmitterBuilder::new()
-                .avoid_quotes()
-                .build(&mut writer);
+            let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
 
