@@ -207,7 +207,12 @@ impl<'a> YamlEmitter<'a> {
                 }
             },
             Yaml::String(ref v) => {
-                try!(escape_str(self.writer, v));
+                if need_quotes(v) {
+                    try!(escape_str(self.writer, v));
+                }
+                else {
+                    try!(write!(self.writer, "{}", v));
+                }
                 Ok(())
             },
             Yaml::Boolean(v) => {
@@ -234,6 +239,30 @@ impl<'a> YamlEmitter<'a> {
             _ => { Ok(()) }
         }
     }
+}
+
+/// Check if the string requires quoting.
+/// Strings containing any of the following characters must be quoted.
+/// :, {, }, [, ], ,, &, *, #, ?, |, -, <, >, =, !, %, @, `
+///
+/// If the string contains any of the following control characters, it must be escaped with double quotes:
+/// \0, \x01, \x02, \x03, \x04, \x05, \x06, \a, \b, \t, \n, \v, \f, \r, \x0e, \x0f, \x10, \x11, \x12, \x13, \x14, \x15, \x16, \x17, \x18, \x19, \x1a, \e, \x1c, \x1d, \x1e, \x1f, \N, \_, \L, \P
+///
+/// Finally, there are other cases when the strings must be quoted, no matter if you're using single or double quotes:
+/// * When the string is true or false (otherwise, it would be treated as a boolean value);
+/// * When the string is null or ~ (otherwise, it would be considered as a null value);
+/// * When the string looks like a number, such as integers (e.g. 2, 14, etc.), floats (e.g. 2.6, 14.9) and exponential numbers (e.g. 12e7, etc.) (otherwise, it would be treated as a numeric value);
+/// * When the string looks like a date (e.g. 2014-12-31) (otherwise it would be automatically converted into a Unix timestamp).
+fn need_quotes(string: &str) -> bool {
+    string.contains(|character: char| {
+        match character {
+            ':' | '{' | '}' | '[' | ']' | ',' | '&' | '*' | '#' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' | '`' | '\\' | '\0' ... '\x06' | '\t' | '\n' | '\r' | '\x0e' ... '\x1a' | '\x1c' ... '\x1f' => true,
+            _ => false,
+        }
+    }) ||
+        string == "true" || string == "false" || string == "null" || string == "~" ||
+        string.parse::<i64>().is_ok() ||
+        string.parse::<f64>().is_ok()
 }
 
 #[cfg(test)]
@@ -308,5 +337,44 @@ products:
         let docs_new = YamlLoader::load_from_str(&s).unwrap();
         let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
+    }
+
+    #[test]
+    fn test_emit_avoid_quotes() {
+        let s = r#"---
+a7: 你好
+boolean: "true"
+boolean2: "false"
+date: "2014-12-31"
+exp: "12e7"
+field: ":"
+field2: "{"
+field3: "\\"
+field4: "\n"
+float: "2.6"
+int: "4"
+nullable: "null"
+nullable2: "~"
+products: 
+  "*coffee": 
+    amount: 4
+  "*cookies": 
+    amount: 4
+  "2.4": real key
+  "[1,2,3,4]": array key
+  "true": bool key
+  "{}": empty hash key
+x: test
+y: string with spaces"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+
+        assert_eq!(s, writer);
     }
 }
