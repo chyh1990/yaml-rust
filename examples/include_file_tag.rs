@@ -24,7 +24,7 @@ impl<'a> IncludeParser<'a> {
 impl<'a> yaml::YamlScalarParser for IncludeParser<'a> {
     fn parse_scalar(&self, tag: &scanner::TokenType, value: &str) -> Option<yaml::Yaml> {
         if let scanner::TokenType::Tag(ref handle, ref suffix) = *tag {
-            if *handle == "!" && *suffix == "include" {
+            if (*handle == "!" || *handle == "yaml-rust.include.prefix") && *suffix == "include" {
                 let mut content = String::new();
                 return Some(match File::open(self.root.join(value)){
                     Ok(mut f) => {

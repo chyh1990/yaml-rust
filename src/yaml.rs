@@ -696,7 +696,7 @@ c: ~
     impl YamlScalarParser for HelloTagParser {
         fn parse_scalar(&self, tag: &TokenType, value: &str) -> Option<Yaml> {
             if let TokenType::Tag(ref handle, ref suffix) = *tag {
-                if *handle == "!" && *suffix == "hello" {
+                if (*handle == "!" || *handle == "yaml-rust.hello.prefix") && *suffix == "hello" {
                     return Some(Yaml::String("Hello ".to_string() + value))
                 }
             }
@@ -709,8 +709,23 @@ c: ~
         let parser = HelloTagParser;
         let mut loader = YamlLoader::new();
         loader.register_scalar_parser(&parser);
-        let out = loader.parse_from_str("- !hello world").unwrap();
+        let out = loader.parse_from_str("!hello world").unwrap();
         let doc = &out[0];
-        assert_eq!(doc[0].as_str().unwrap() , "Hello world")
+        assert_eq!(doc.as_str().unwrap() , "Hello world")
+    }
+
+    #[test]
+    fn test_tag_directive() {
+        let parser = HelloTagParser;
+        let mut loader = YamlLoader::new();
+        loader.register_scalar_parser(&parser);
+        let out = loader.parse_from_str(
+"%YAML 1.2
+%TAG ! yaml-rust.hello.prefix:
+---
+!hello world"
+        ).unwrap();
+        let doc = &out[0];
+        assert_eq!(doc.as_str().unwrap() , "Hello world")
     }
 }
