@@ -72,6 +72,7 @@ pub struct Parser<T> {
     current: Option<(Event, Marker)>,
     anchors: HashMap<String, usize>,
     anchor_id: usize,
+    tag_directives: HashMap<String, String>,
 }
 
 pub trait EventReceiver {
@@ -103,6 +104,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             anchors: HashMap::new(),
             // valid anchor_id starts from 1
             anchor_id: 1,
+            tag_directives: HashMap::new(),
         }
     }
 
@@ -374,14 +376,16 @@ impl<T: Iterator<Item = char>> Parser<T> {
                     //        "found incompatible YAML document"));
                     //}
                 }
-                TokenType::TagDirective(..) => {
-                    // TODO add tag directive
+                TokenType::TagDirective(ref handle, ref prefix) => {
+                    let handle = String::from(handle);
+                    let mut prefix = String::from(prefix);
+                    prefix.pop();
+                    self.tag_directives.insert(handle, prefix);
                 }
                 _ => break,
             }
             self.skip();
         }
-        // TODO tag directive
         Ok(())
     }
 
@@ -502,7 +506,24 @@ impl<T: Iterator<Item = char>> Parser<T> {
             Token(_, TokenType::Scalar(..)) => {
                 self.pop_state();
                 if let Token(mark, TokenType::Scalar(style, v)) = self.fetch_token() {
-                    Ok((Event::Scalar(v, style, anchor_id, tag), mark))
+                    Ok((
+                        if let Some(TokenType::Tag(handle, suffix)) = tag {
+                            let t = self.tag_directives.get(&handle);
+                            Event::Scalar(
+                                v,
+                                style,
+                                anchor_id,
+                                Some(if let Some(s) = t {
+                                    TokenType::Tag((*s).clone(), suffix)
+                                } else {
+                                    TokenType::Tag(handle, suffix)
+                                }),
+                            )
+                        } else {
+                            Event::Scalar(v, style, anchor_id, tag)
+                        },
+                        mark,
+                    ))
                 } else {
                     unreachable!()
                 }
