@@ -3,7 +3,7 @@
 extern crate yaml_rust;
 
 use yaml_rust::parser::{Parser, EventReceiver, Event};
-use yaml_rust::scanner::TScalarStyle;
+use yaml_rust::scanner::{Marker, TScalarStyle};
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 enum TestEvent {
@@ -23,7 +23,7 @@ struct YamlChecker {
 }
 
 impl EventReceiver for YamlChecker {
-    fn on_event(&mut self, ev: &Event) {
+    fn on_event(&mut self, ev: &Event, _: Marker) {
         let tev = match *ev {
             Event::DocumentStart => TestEvent::OnDocumentStart,
             Event::DocumentEnd => TestEvent::OnDocumentEnd,
