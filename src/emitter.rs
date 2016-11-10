@@ -259,10 +259,14 @@ fn need_quotes(string: &str) -> bool {
             ':' | '{' | '}' | '[' | ']' | ',' | '&' | '*' | '#' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' | '`' | '\\' | '\0' ... '\x06' | '\t' | '\n' | '\r' | '\x0e' ... '\x1a' | '\x1c' ... '\x1f' => true,
             _ => false,
         }
-    }) ||
-        string == "true" || string == "false" || string == "null" || string == "~" ||
-        string.parse::<i64>().is_ok() ||
-        string.parse::<f64>().is_ok()
+    })
+    || string == "true"
+    || string == "false"
+    || string == "null"
+    || string == "~"
+    || string == ""
+    || string.parse::<i64>().is_ok()
+    || string.parse::<f64>().is_ok()
 }
 
 #[cfg(test)]
@@ -346,6 +350,7 @@ a7: 你好
 boolean: "true"
 boolean2: "false"
 date: "2014-12-31"
+empty_string: ""
 exp: "12e7"
 field: ":"
 field2: "{"
