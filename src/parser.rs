@@ -74,13 +74,23 @@ pub struct Parser<T> {
     anchor_id: usize,
 }
 
+
 pub trait EventReceiver {
     fn on_event(&mut self, ev: &Event);
+}
 
-    fn on_event_with_marker(&mut self, ev: &Event, _mark: Marker) {
+
+pub trait MarkedEventReceiver {
+    fn on_event(&mut self, ev: &Event, _mark: Marker);
+}
+
+impl<R: EventReceiver> MarkedEventReceiver for R {
+    fn on_event(&mut self, ev: &Event, _mark: Marker) {
         self.on_event(ev)
     }
 }
+
+
 
 pub type ParseResult = Result<(Event, Marker), ScanError>;
 
@@ -126,18 +136,18 @@ impl<T: Iterator<Item=char>> Parser<T> {
         self.states.push(state);
     }
 
-    fn parse<R: EventReceiver>(&mut self, recv: &mut R)
+    fn parse<R: MarkedEventReceiver>(&mut self, recv: &mut R)
         -> Result<Event, ScanError> {
         if self.state == State::End {
             return Ok(Event::StreamEnd);
         }
         let (ev, mark) = try!(self.state_machine());
         // println!("EV {:?}", ev);
-        recv.on_event_with_marker(&ev, mark);
+        recv.on_event(&ev, mark);
         Ok(ev)
     }
 
-    pub fn load<R: EventReceiver>(&mut self, recv: &mut R, multi: bool)
+    pub fn load<R: MarkedEventReceiver>(&mut self, recv: &mut R, multi: bool)
         -> Result<(), ScanError> {
         if !self.scanner.stream_started() {
             let ev = try!(self.parse(recv));
@@ -146,13 +156,13 @@ impl<T: Iterator<Item=char>> Parser<T> {
 
         if self.scanner.stream_ended() {
             // XXX has parsed?
-            recv.on_event_with_marker(&Event::StreamEnd, self.scanner.mark());
+            recv.on_event(&Event::StreamEnd, self.scanner.mark());
             return Ok(());
         }
         loop {
             let ev = try!(self.parse(recv));
             if ev == Event::StreamEnd {
-                recv.on_event_with_marker(&Event::StreamEnd, self.scanner.mark());
+                recv.on_event(&Event::StreamEnd, self.scanner.mark());
                 return Ok(());
             }
             // clear anchors before a new document
@@ -165,7 +175,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(())
     }
 
-    fn load_document<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+    fn load_document<R: MarkedEventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         assert_eq!(first_ev, &Event::DocumentStart);
 
@@ -179,7 +189,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(())
     }
 
-    fn load_node<R: EventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+    fn load_node<R: MarkedEventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         match *first_ev {
             Event::Alias(..) | Event::Scalar(..) => {
@@ -196,7 +206,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         }
     }
 
-    fn load_mapping<R: EventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
+    fn load_mapping<R: MarkedEventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         let mut ev = try!(self.parse(recv));
         while ev != Event::MappingEnd {
@@ -213,7 +223,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(())
     }
 
-    fn load_sequence<R: EventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
+    fn load_sequence<R: MarkedEventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
         -> Result<(), ScanError> {
         let mut ev = try!(self.parse(recv));
         while ev != Event::SequenceEnd {

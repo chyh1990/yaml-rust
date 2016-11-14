@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::mem;
 use std::vec;
 use parser::*;
-use scanner::{TScalarStyle, ScanError, TokenType};
+use scanner::{TScalarStyle, ScanError, TokenType, Marker};
 
 /// A YAML node is stored as this `Yaml` enumeration, which provides an easy way to
 /// access your YAML document.
@@ -74,8 +74,8 @@ pub struct YamlLoader {
     anchor_map: BTreeMap<usize, Yaml>,
 }
 
-impl EventReceiver for YamlLoader {
-    fn on_event(&mut self, ev: &Event) {
+impl MarkedEventReceiver for YamlLoader {
+    fn on_event(&mut self, ev: &Event, _: Marker) {
         // println!("EV {:?}", ev);
         match *ev {
             Event::DocumentStart => {
