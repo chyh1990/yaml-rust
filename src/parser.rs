@@ -10,8 +10,8 @@ enum State {
     DocumentContent,
     DocumentEnd,
     BlockNode,
-    BlockNodeOrIndentlessSequence,
-    FlowNode,
+    // BlockNodeOrIndentlessSequence,
+    // FlowNode,
     BlockSequenceFirstEntry,
     BlockSequenceEntry,
     IndentlessSequenceEntry,
@@ -247,8 +247,8 @@ impl<T: Iterator<Item=char>> Parser<T> {
             State::DocumentEnd => self.document_end(),
 
             State::BlockNode => self.parse_node(true, false),
-            State::BlockNodeOrIndentlessSequence => self.parse_node(true, true),
-            State::FlowNode => self.parse_node(false, false),
+            // State::BlockNodeOrIndentlessSequence => self.parse_node(true, true),
+            // State::FlowNode => self.parse_node(false, false),
 
             State::BlockMappingFirstKey => self.block_mapping_key(true),
             State::BlockMappingKey => self.block_mapping_key(false),
