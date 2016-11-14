@@ -9,33 +9,83 @@ use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType, Marker};
 
 
+/// A trait representing a parsed Yaml document.
+///
+/// The trait is used for parsing documents from a Yaml file. The content
+/// of the document will be parsed into a value of the type given through
+/// the `Item` associated type. A document then constructed by passing this
+/// item to the `create()` function.
 pub trait Document: Sized {
+    /// The type for all items of the document.
     type Item: Item;
+
+    /// The type for sequences.
     type Sequence: Sequence<Item=Self::Item>;
+
+    /// The type for maps.
     type Map: Map<Item=Self::Item>;
 
+    /// Creates a document from an item.
     fn create(item: Self::Item) -> Self;
 }
 
+/// A trait representing all parsed data items.
+///
+/// Scalar data is created directly using the `create_scalar()` function.
+/// Sequence and mapping data is created using the specialised traits
+/// `Sequence` and `Map` which both are converted into items through their
+/// `finalize()` methods.
 pub trait Item: Clone + Sized {
+    /// Creates a scalar item.
     fn create_scalar(value: &str, style: TScalarStyle,
                      tag: &Option<TokenType>, mark: Marker) -> Self;
+
+    /// Creates a bad value item.
+    ///
+    /// Such values are created for invalid type conversion and when
+    /// accessing non-existent aliases.
     fn create_bad_value() -> Self;
 }
 
+/// A trait representing parsed sequence data.
+///
+/// When parsing a sequence, a new value of this trait is created through
+/// the `create()` function. Each element of the sequence is parsed into a
+/// value of the `Item` associated type and then added via the `push()`
+/// method. Once all elements are added, the sequence is converted into an
+/// item itself through the `finalize()` method.
 pub trait Sequence: Clone + Sized {
+    /// The item type used by documents containing this sequence.
     type Item: Item;
 
+    /// Creates a new sequence.
     fn create(mark: Marker) -> Self;
+
+    /// Adds a new element ot the sequence.
     fn push(&mut self, item: Self::Item);
+
+    /// Converts the sequence into an item for further processing.
     fn finalize(self) -> Self::Item;
 }
 
+/// A trait representing parsed map data.
+///
+/// When parsing a mapping, a new value of this trait is created through
+/// the `create()` function. Key and value of the each element of the mapping
+/// are parsed into values of the `Item` associated type and then added via
+/// the `insert()` method. Once all elements have been added, the map value
+/// is converted into an item through the `finalize()` method.
 pub trait Map: Clone + Sized {
+    /// The item type used by documents containing this sequence.
     type Item: Item;
 
+    /// Creates a new mapping.
     fn create(mark: Marker) -> Self;
+
+    /// Adds a new element with the given key and value.
     fn insert(&mut self, key: Self::Item, value: Self::Item);
+
+    /// Converts the mapping into an item for further processing.
     fn finalize(self) -> Self::Item;
 }
 
