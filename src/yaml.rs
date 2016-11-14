@@ -8,6 +8,38 @@ use std::vec;
 use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType, Marker};
 
+
+pub trait Document: Sized {
+    type Item: Item;
+    type Sequence: Sequence<Item=Self::Item>;
+    type Map: Map<Item=Self::Item>;
+
+    fn create(item: Self::Item) -> Self;
+}
+
+pub trait Item: Clone + Sized {
+    fn create_scalar(value: &str, style: TScalarStyle,
+                     tag: &Option<TokenType>, mark: Marker) -> Self;
+    fn create_bad_value() -> Self;
+}
+
+pub trait Sequence: Clone + Sized {
+    type Item: Item;
+
+    fn create(mark: Marker) -> Self;
+    fn push(&mut self, item: Self::Item);
+    fn finalize(self) -> Self::Item;
+}
+
+pub trait Map: Clone + Sized {
+    type Item: Item;
+
+    fn create(mark: Marker) -> Self;
+    fn insert(&mut self, key: Self::Item, value: Self::Item);
+    fn finalize(self) -> Self::Item;
+}
+
+
 /// A YAML node is stored as this `Yaml` enumeration, which provides an easy way to
 /// access your YAML document.
 ///
@@ -58,47 +90,182 @@ pub enum Yaml {
     BadValue,
 }
 
+impl Document for Yaml {
+    type Item = Self;
+    type Sequence = Array;
+    type Map = Hash;
+
+    fn create(item: Self) -> Self { item }
+}
+
+impl Item for Yaml {
+    fn create_scalar(v: &str, style: TScalarStyle,
+                     tag: &Option<TokenType>, _mark: Marker) -> Self {
+        if style != TScalarStyle::Plain {
+            Yaml::String(v.into())
+        } else if let Some(TokenType::Tag(ref handle, ref suffix)) = *tag {
+            // XXX tag:yaml.org,2002:
+            if handle == "!!" {
+                match suffix.as_ref() {
+                    "bool" => {
+                        // "true" or "false"
+                        match v.parse::<bool>() {
+                            Err(_) => Yaml::BadValue,
+                            Ok(v) => Yaml::Boolean(v)
+                        }
+                    },
+                    "int" => {
+                        match v.parse::<i64>() {
+                            Err(_) => Yaml::BadValue,
+                            Ok(v) => Yaml::Integer(v)
+                        }
+                    },
+                    "float" => {
+                        match v.parse::<f64>() {
+                            Err(_) => Yaml::BadValue,
+                            Ok(_) => Yaml::Real(v.into())
+                        }
+                    },
+                    "null" => {
+                        match v.as_ref() {
+                            "~" | "null" => Yaml::Null,
+                            _ => Yaml::BadValue,
+                        }
+                    }
+                    _  => Yaml::String(v.into()),
+                }
+            } else {
+                Yaml::String(v.into())
+            }
+        } else {
+            // Datatype is not specified, or unrecognized
+            Yaml::from_str(v.as_ref())
+        }
+    }
+
+    fn create_bad_value() -> Self {
+        Yaml::BadValue
+    }
+}
+
+
 pub type Array = Vec<Yaml>;
+
+impl Sequence for Array {
+    type Item = Yaml;
+
+    fn create(_mark: Marker) -> Self {
+        Vec::new()
+    }
+
+    fn push(&mut self, item: Yaml) {
+        self.push(item)
+    }
+
+    fn finalize(self) -> Yaml {
+        Yaml::Array(self)
+    }
+}
+
 
 #[cfg(not(feature = "preserve_order"))]
 pub type Hash = BTreeMap<Yaml, Yaml>;
 #[cfg(feature = "preserve_order")]
 pub type Hash = ::linked_hash_map::LinkedHashMap<Yaml, Yaml>;
 
-pub struct YamlLoader {
-    docs: Vec<Yaml>,
-    // states
-    // (current node, anchor_id) tuple
-    doc_stack: Vec<(Yaml, usize)>,
-    key_stack: Vec<Yaml>,
-    anchor_map: BTreeMap<usize, Yaml>,
+impl Map for Hash {
+    type Item = Yaml;
+
+    fn create(_mark: Marker) -> Self {
+        Hash::new()
+    }
+
+    fn insert(&mut self, key: Yaml, value: Yaml) {
+        self.insert(key, value);
+    }
+
+    fn finalize(self) -> Yaml {
+        Yaml::Hash(self)
+    }
 }
 
-impl MarkedEventReceiver for YamlLoader {
-    fn on_event(&mut self, ev: &Event, _: Marker) {
+
+enum Node<D: Document> {
+    Scalar(D::Item),
+    Array(D::Sequence),
+    Hash(D::Map),
+    BadValue,
+}
+
+impl<D: Document> Node<D> {
+    pub fn is_badvalue(&self) -> bool {
+        match *self {
+            Node::BadValue => true,
+            _ => false
+        }
+    }
+
+    fn into_item(self) -> D::Item {
+        match self {
+            Node::Scalar(item) => item,
+            Node::Array(item) => item.finalize(),
+            Node::Hash(item) => item.finalize(),
+            Node::BadValue => <D::Item as Item>::create_bad_value()
+        }
+    }
+}
+
+impl<D: Document> Clone for Node<D> {
+    fn clone(&self) -> Self {
+        match *self {
+            Node::Scalar(ref item) => Node::Scalar(item.clone()),
+            Node::Array(ref item) => Node::Array(item.clone()),
+            Node::Hash(ref item) => Node::Hash(item.clone()),
+            Node::BadValue => Node::BadValue
+        }
+    }
+}
+
+pub type YamlLoader = GenericYamlLoader<Yaml>;
+
+pub struct GenericYamlLoader<D: Document> {
+    docs: Vec<D>,
+    // states
+    // (current node, anchor_id) tuple
+    doc_stack: Vec<(Node<D>, usize)>,
+    key_stack: Vec<Node<D>>,
+    anchor_map: BTreeMap<usize, Node<D>>,
+}
+
+impl<D: Document> MarkedEventReceiver for GenericYamlLoader<D> {
+    fn on_event(&mut self, ev: &Event, mark: Marker) {
         // println!("EV {:?}", ev);
         match *ev {
             Event::DocumentStart => {
                 // do nothing
             },
             Event::DocumentEnd => {
-                match self.doc_stack.len() {
+                let node = match self.doc_stack.len() {
                     // empty document
-                    0 => self.docs.push(Yaml::BadValue),
-                    1 => self.docs.push(self.doc_stack.pop().unwrap().0),
+                    0 => Node::BadValue,
+                    1 => self.doc_stack.pop().unwrap().0,
                     _ => unreachable!()
-                }
+                };
+                self.docs.push(D::create(node.into_item()));
             },
             Event::SequenceStart(aid) => {
-                self.doc_stack.push((Yaml::Array(Vec::new()), aid));
+                self.doc_stack.push(
+                    (Node::Array(<D::Sequence as Sequence>::create(mark)),
+                     aid));
             },
             Event::SequenceEnd => {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
             Event::MappingStart(aid) => {
-                self.doc_stack.push((Yaml::Hash(Hash::new()), aid));
-                self.key_stack.push(Yaml::BadValue);
+                self.doc_stack.push(
+                    (Node::Hash(<D::Map as Map>::create(mark)), aid));
+                self.key_stack.push(Node::BadValue);
             },
             Event::MappingEnd => {
                 self.key_stack.pop().unwrap();
@@ -106,53 +273,14 @@ impl MarkedEventReceiver for YamlLoader {
                 self.insert_new_node(node);
             },
             Event::Scalar(ref v, style, aid, ref tag) => {
-                let node = if style != TScalarStyle::Plain {
-                    Yaml::String(v.clone())
-                } else if let Some(TokenType::Tag(ref handle, ref suffix)) = *tag {
-                    // XXX tag:yaml.org,2002:
-                    if handle == "!!" {
-                        match suffix.as_ref() {
-                            "bool" => {
-                                // "true" or "false"
-                                match v.parse::<bool>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(v) => Yaml::Boolean(v)
-                                }
-                            },
-                            "int" => {
-                                match v.parse::<i64>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(v) => Yaml::Integer(v)
-                                }
-                            },
-                            "float" => {
-                                match v.parse::<f64>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(_) => Yaml::Real(v.clone())
-                                }
-                            },
-                            "null" => {
-                                match v.as_ref() {
-                                    "~" | "null" => Yaml::Null,
-                                    _ => Yaml::BadValue,
-                                }
-                            }
-                            _  => Yaml::String(v.clone()),
-                        }
-                    } else {
-                        Yaml::String(v.clone())
-                    }
-                } else {
-                    // Datatype is not specified, or unrecognized
-                    Yaml::from_str(v.as_ref())
-                };
-
-                self.insert_new_node((node, aid));
+                let item = <D::Item as Item>::create_scalar(v, style, tag,
+                                                            mark);
+                self.insert_new_node((Node::Scalar(item), aid));
             },
             Event::Alias(id) => {
                 let n = match self.anchor_map.get(&id) {
                     Some(v) => v.clone(),
-                    None => Yaml::BadValue,
+                    None => Node::BadValue,
                 };
                 self.insert_new_node((n, 0));
             }
@@ -162,8 +290,8 @@ impl MarkedEventReceiver for YamlLoader {
     }
 }
 
-impl YamlLoader {
-    fn insert_new_node(&mut self, node: (Yaml, usize)) {
+impl<D: Document> GenericYamlLoader<D> {
+    fn insert_new_node(&mut self, node: (Node<D>, usize)) {
         // valid anchor id starts from 1
         if node.1 > 0 {
             self.anchor_map.insert(node.1, node.0.clone());
@@ -173,17 +301,17 @@ impl YamlLoader {
         } else {
             let parent = self.doc_stack.last_mut().unwrap();
             match *parent {
-                (Yaml::Array(ref mut v), _) => v.push(node.0),
-                (Yaml::Hash(ref mut h), _) => {
+                (Node::Array(ref mut v), _) => v.push(node.0.into_item()),
+                (Node::Hash(ref mut h), _) => {
                     let mut cur_key = self.key_stack.last_mut().unwrap();
                     // current node is a key
                     if cur_key.is_badvalue() {
                         *cur_key = node.0;
                     // current node is a value
                     } else {
-                        let mut newkey = Yaml::BadValue;
+                        let mut newkey = Node::BadValue;
                         mem::swap(&mut newkey, cur_key);
-                        h.insert(newkey, node.0);
+                        h.insert(newkey.into_item(), node.0.into_item());
                     }
                 },
                 _ => unreachable!(),
@@ -191,8 +319,8 @@ impl YamlLoader {
         }
     }
 
-    pub fn load_from_str(source: &str) -> Result<Vec<Yaml>, ScanError>{
-        let mut loader = YamlLoader {
+    pub fn load_from_str(source: &str) -> Result<Vec<D>, ScanError>{
+        let mut loader = GenericYamlLoader {
             docs: Vec::new(),
             doc_stack: Vec::new(),
             key_stack: Vec::new(),
