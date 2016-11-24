@@ -1082,11 +1082,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                     }
                     leading_break.clear();
             } else {
-                string.extend(leading_break.chars());
+                string.push_str(&leading_break);
                 leading_break.clear();
             }
 
-            string.extend(trailing_breaks.chars());
+            string.push_str(&trailing_breaks);
             trailing_breaks.clear();
 
             leading_blank = is_blank(self.ch());
@@ -1108,11 +1108,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
 
         // Chomp the tail.
         if chomping != -1 {
-            string.extend(leading_break.chars());
+            string.push_str(&leading_break);
         }
 
         if chomping == 1 {
-            string.extend(trailing_breaks.chars());
+            string.push_str(&trailing_breaks);
         }
 
         if literal {
@@ -1327,21 +1327,21 @@ impl<T: Iterator<Item=char>> Scanner<T> {
             // Join the whitespaces or fold line breaks.
             if leading_blanks {
                 if leading_break.is_empty() {
-                    string.extend(leading_break.chars());
-                    string.extend(trailing_breaks.chars());
+                    string.push_str(&leading_break);
+                    string.push_str(&trailing_breaks);
                     trailing_breaks.clear();
                     leading_break.clear();
                 } else {
                     if trailing_breaks.is_empty() {
                         string.push(' ');
                     } else {
-                        string.extend(trailing_breaks.chars());
+                        string.push_str(&trailing_breaks);
                         trailing_breaks.clear();
                     }
                     leading_break.clear();
                 }
             } else {
-                string.extend(whitespaces.chars());
+                string.push_str(&whitespaces);
                 whitespaces.clear();
             }
         } // loop
@@ -1408,15 +1408,15 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 if leading_blanks || !whitespaces.is_empty() {
                     if leading_blanks {
                         if leading_break.is_empty() {
-                            string.extend(leading_break.chars());
-                            string.extend(trailing_breaks.chars());
+                            string.push_str(&leading_break);
+                            string.push_str(&trailing_breaks);
                             trailing_breaks.clear();
                             leading_break.clear();
                         } else {
                             if trailing_breaks.is_empty() {
                                 string.push(' ');
                             } else {
-                                string.extend(trailing_breaks.chars());
+                                string.push_str(&trailing_breaks);
                                 trailing_breaks.clear();
                             }
                             leading_break.clear();
@@ -1424,7 +1424,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                         }
                         leading_blanks = false;
                     } else {
-                        string.extend(whitespaces.chars());
+                        string.push_str(&whitespaces);
                         whitespaces.clear();
                     }
                 }
