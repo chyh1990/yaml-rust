@@ -254,7 +254,14 @@ impl<'a> YamlEmitter<'a> {
 /// * When the string looks like a number, such as integers (e.g. 2, 14, etc.), floats (e.g. 2.6, 14.9) and exponential numbers (e.g. 12e7, etc.) (otherwise, it would be treated as a numeric value);
 /// * When the string looks like a date (e.g. 2014-12-31) (otherwise it would be automatically converted into a Unix timestamp).
 fn need_quotes(string: &str) -> bool {
-    string.contains(|character: char| {
+    fn need_quotes_spaces(string: &str) -> bool {
+        string.starts_with(' ')
+            || string.ends_with(' ')
+    }
+
+    string == ""
+    || need_quotes_spaces(string)
+    || string.contains(|character: char| {
         match character {
             ':' | '{' | '}' | '[' | ']' | ',' | '&' | '*' | '#' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' | '`' | '\\' | '\0' ... '\x06' | '\t' | '\n' | '\r' | '\x0e' ... '\x1a' | '\x1c' ... '\x1f' => true,
             _ => false,
@@ -264,7 +271,6 @@ fn need_quotes(string: &str) -> bool {
     || string == "false"
     || string == "null"
     || string == "~"
-    || string == ""
     || string.parse::<i64>().is_ok()
     || string.parse::<f64>().is_ok()
 }
@@ -351,6 +357,9 @@ boolean: "true"
 boolean2: "false"
 date: "2014-12-31"
 empty_string: ""
+empty_string1: " "
+empty_string2: "    a"
+empty_string3: "    a "
 exp: "12e7"
 field: ":"
 field2: "{"
