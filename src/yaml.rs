@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
 use std::i64;
-use std::str::FromStr;
 use std::mem;
 use std::vec;
 use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType, Marker};
+use linked_hash_map::LinkedHashMap;
 
 /// A YAML node is stored as this `Yaml` enumeration, which provides an easy way to
 /// access your YAML document.
@@ -37,16 +37,9 @@ pub enum Yaml {
     Boolean(bool),
     /// YAML array, can be accessed as a `Vec`.
     Array(self::Array),
-    /// YAML hash, can be accessed as a `BTreeMap`.
+    /// YAML hash, can be accessed as a `LinkedHashMap`.
     ///
-    /// If the order of keys is meaningful, enable the `preserve_order` feature to
-    /// store hashes as a `LinkedHashMap` intead of `BTreeMap`. When using a
-    /// `LinkedHashMap`, the itertion order will match the order of insertion into
-    /// the map.
-    ///
-    /// ```toml
-    /// yaml-rust = { version = "*", features = ["preserve_order"] }
-    /// ```
+    /// Itertion order will match the order of insertion into the map.
     Hash(self::Hash),
     /// Alias, not fully supported yet.
     Alias(usize),
@@ -59,11 +52,7 @@ pub enum Yaml {
 }
 
 pub type Array = Vec<Yaml>;
-
-#[cfg(not(feature = "preserve_order"))]
-pub type Hash = BTreeMap<Yaml, Yaml>;
-#[cfg(feature = "preserve_order")]
-pub type Hash = ::linked_hash_map::LinkedHashMap<Yaml, Yaml>;
+pub type Hash = LinkedHashMap<Yaml, Yaml>;
 
 pub struct YamlLoader {
     docs: Vec<Yaml>,
@@ -586,5 +575,21 @@ a1: &DEFAULT
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
+    }
+
+    #[test]
+    fn test_hash_order() {
+        let s = "---
+b: ~
+a: ~
+c: ~
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        let mut iter = first.into_hash().unwrap().into_iter();
+        assert_eq!(Some((Yaml::String("b".to_owned()), Yaml::Null)), iter.next());
+        assert_eq!(Some((Yaml::String("a".to_owned()), Yaml::Null)), iter.next());
+        assert_eq!(Some((Yaml::String("c".to_owned()), Yaml::Null)), iter.next());
+        assert_eq!(None, iter.next());
     }
 }

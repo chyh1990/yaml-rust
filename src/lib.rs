@@ -42,7 +42,6 @@
 #![cfg_attr(feature="clippy", warn(cyclomatic_complexity))]
 #![cfg_attr(feature="clippy", allow(match_same_arms))]
 
-#[cfg(feature = "preserve_order")]
 extern crate linked_hash_map;
 
 pub mod yaml;
