@@ -183,9 +183,6 @@ impl<'a> YamlEmitter<'a> {
                     try!(self.writer.write_str("{}"));
                     Ok(())
                 } else {
-                    if self.level >= 0 {
-                        try!(write!(self.writer, "\n"));
-                    }
                     self.level += 1;
                     for (cnt, (k, v)) in h.iter().enumerate() {
                         if cnt > 0 {
@@ -199,7 +196,10 @@ impl<'a> YamlEmitter<'a> {
                             },
                             _ => { try!(self.emit_node(k)); }
                         }
-                        try!(write!(self.writer, ": "));
+                        match *v {
+                            Yaml::Hash(_) => try!(write!(self.writer, ":\n")),
+                            _ => try!(write!(self.writer, ": "))
+                        }
                         try!(self.emit_node(v));
                     }
                     self.level -= 1;
@@ -369,10 +369,10 @@ float: "2.6"
 int: "4"
 nullable: "null"
 nullable2: "~"
-products: 
-  "*coffee": 
+products:
+  "*coffee":
     amount: 4
-  "*cookies": 
+  "*cookies":
     amount: 4
   "2.4": real key
   "[1,2,3,4]": array key
