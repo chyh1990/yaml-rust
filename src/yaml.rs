@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
 use std::i64;
-use std::str::FromStr;
 use std::mem;
 use std::vec;
 use parser::*;
