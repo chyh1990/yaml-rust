@@ -291,6 +291,7 @@ fn need_quotes(string: &str) -> bool {
     || string == "false"
     || string == "null"
     || string == "~"
+    || string.starts_with('.')
     || string.parse::<i64>().is_ok()
     || string.parse::<f64>().is_ok()
 }
@@ -394,6 +395,8 @@ products:
     amount: 4
   "*cookies":
     amount: 4
+  ".milk": 
+    amount: 1
   "2.4": real key
   "[1,2,3,4]": array key
   "true": bool key
