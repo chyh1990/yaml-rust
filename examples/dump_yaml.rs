@@ -12,13 +12,13 @@ fn print_indent(indent: usize) {
 }
 
 fn dump_node(doc: &yaml::Yaml, indent: usize) {
-    match doc {
-        &yaml::Yaml::Array(ref v) => {
+    match *doc {
+        yaml::Yaml::Array(ref v) => {
             for x in v {
                 dump_node(x, indent + 1);
             }
         },
-        &yaml::Yaml::Hash(ref h) => {
+        yaml::Yaml::Hash(ref h) => {
             for (k, v) in h {
                 print_indent(indent);
                 println!("{:?}:", k);

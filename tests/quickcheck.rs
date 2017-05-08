@@ -11,11 +11,11 @@ quickcheck! {
         let mut out_str = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut out_str);
-            emitter.dump(&Yaml::Array(xs.into_iter().map(|s| Yaml::String(s)).collect())).unwrap();
+            emitter.dump(&Yaml::Array(xs.into_iter().map(Yaml::String).collect())).unwrap();
         }
         if let Err(err) = YamlLoader::load_from_str(&out_str) {
             return TestResult::error(err.description());
         }
-        return TestResult::passed();
+        TestResult::passed()
     }
 }

@@ -1,6 +1,6 @@
 use std::fmt;
 use std::convert::From;
-use yaml::{Array, Hash, Yaml};
+use yaml::{Hash, Yaml};
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
@@ -193,7 +193,7 @@ impl<'a> YamlEmitter<'a> {
         }
     }
 
-    fn emit_array(&mut self, v: &Array) -> EmitResult {
+    fn emit_array(&mut self, v: &[Yaml]) -> EmitResult {
         if v.is_empty() {
             try!(write!(self.writer, "[]"));
         } else {
