@@ -1,6 +1,6 @@
 use std::fmt;
 use std::convert::From;
-use yaml::Yaml;
+use yaml::{Array, Hash, Yaml};
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
@@ -151,61 +151,14 @@ impl<'a> YamlEmitter<'a> {
                     self.level -= 1;
                     Ok(())
             },
-            _ => self.emit_node(node)
+            _ => self.emit_node(node),
         }
     }
 
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
         match *node {
-            Yaml::Array(ref v) => {
-                if v.is_empty() {
-                    try!(write!(self.writer, "[]"));
-                    Ok(())
-                } else {
-                    if self.level >= 0 {
-                        try!(write!(self.writer, "\n"));
-                    }
-                    self.level += 1;
-                    for (cnt, x) in v.iter().enumerate() {
-                        if cnt > 0 {
-                            try!(write!(self.writer, "\n"));
-                        }
-                        try!(self.write_indent());
-                        try!(write!(self.writer, "- "));
-                        try!(self.emit_node(x));
-                    }
-                    self.level -= 1;
-                    Ok(())
-                }
-            },
-            Yaml::Hash(ref h) => {
-                if h.is_empty() {
-                    try!(self.writer.write_str("{}"));
-                    Ok(())
-                } else {
-                    if self.level >= 0 {
-                        try!(write!(self.writer, "\n"));
-                    }
-                    self.level += 1;
-                    for (cnt, (k, v)) in h.iter().enumerate() {
-                        if cnt > 0 {
-                            try!(write!(self.writer, "\n"));
-                        }
-                        try!(self.write_indent());
-                        match *k {
-                            Yaml::Array(_) | Yaml::Hash(_) => {
-                                try!(self.emit_node_compact(k));
-                                //return Err(EmitError::BadHashmapKey);
-                            },
-                            _ => { try!(self.emit_node(k)); }
-                        }
-                        try!(write!(self.writer, ": "));
-                        try!(self.emit_node(v));
-                    }
-                    self.level -= 1;
-                    Ok(())
-                }
-            },
+            Yaml::Array(ref v) => self.emit_array(v),
+            Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
                 if need_quotes(v) {
                     try!(escape_str(self.writer, v));
@@ -238,6 +191,73 @@ impl<'a> YamlEmitter<'a> {
             // XXX(chenyh) Alias
             _ => { Ok(()) }
         }
+    }
+
+    fn emit_array(&mut self, v: &Array) -> EmitResult {
+        if v.is_empty() {
+            try!(write!(self.writer, "[]"));
+        } else {
+            for (cnt, x) in v.iter().enumerate() {
+                if cnt > 0 {
+                    try!(write!(self.writer, "\n"));
+                }
+                try!(self.write_indent());
+                self.level += 1;
+                try!(write!(self.writer, "- "));
+                try!(self.emit_node(x));
+                self.level -= 1;
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_hash(&mut self, h: &Hash) -> EmitResult {
+        if h.is_empty() {
+            try!(self.writer.write_str("{}"));
+        } else {
+            self.level += 1;
+            for (cnt, (k, v)) in h.iter().enumerate() {
+                if cnt > 0 {
+                    try!(write!(self.writer, "\n"));
+                    try!(self.write_indent());
+                }
+                match *k {
+                    Yaml::Array(_) | Yaml::Hash(_) => {
+                        try!(self.emit_node_compact(k));
+                    }
+                    _ => {
+                        try!(self.emit_node(k));
+                    }
+                }
+                match *v {
+                    Yaml::Array(ref v) => {
+                        if v.is_empty() {
+                            try!(write!(self.writer, ": "));
+                        } else {
+                            try!(write!(self.writer, ":\n"));
+                        }
+                        try!(self.emit_array(v));
+                    }
+                    Yaml::Hash(ref h) => {
+                        if h.is_empty() {
+                            try!(write!(self.writer, ": "));
+                        } else {
+                            try!(write!(self.writer, ":\n"));
+                            self.level += 1;
+                            try!(self.write_indent());
+                            self.level -= 1;
+                        }
+                        try!(self.emit_hash(h));
+                    }
+                    _ => {
+                        try!(write!(self.writer, ": "));
+                        try!(self.emit_node(v));
+                    }
+                }
+            }
+            self.level -= 1;
+        }
+        Ok(())
     }
 }
 
@@ -369,10 +389,10 @@ float: "2.6"
 int: "4"
 nullable: "null"
 nullable2: "~"
-products: 
-  "*coffee": 
+products:
+  "*coffee":
     amount: 4
-  "*cookies": 
+  "*cookies":
     amount: 4
   "2.4": real key
   "[1,2,3,4]": array key
@@ -380,6 +400,29 @@ products:
   "{}": empty hash key
 x: test
 y: string with spaces"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+
+        assert_eq!(s, writer, "actual:\n\n{}\n", writer);
+    }
+
+    #[test]
+    fn test_empty_and_nested() {
+        let s = r#"---
+a:
+  b:
+    c: hello
+  d: {}
+e:
+- f
+- g
+- h: []"#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
