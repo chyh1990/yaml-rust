@@ -278,6 +278,7 @@ fn need_quotes(string: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use YamlLoader;
 
     #[test]
     fn test_emit_simple() {
