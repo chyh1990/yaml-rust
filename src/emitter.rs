@@ -1,6 +1,6 @@
 use std::fmt;
 use std::convert::From;
-use yaml::*;
+use yaml::Yaml;
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
