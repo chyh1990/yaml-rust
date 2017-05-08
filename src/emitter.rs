@@ -395,7 +395,7 @@ products:
     amount: 4
   "*cookies":
     amount: 4
-  ".milk": 
+  ".milk":
     amount: 1
   "2.4": real key
   "[1,2,3,4]": array key
