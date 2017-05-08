@@ -1,11 +1,30 @@
-use std::fmt;
+use std::fmt::{self, Display};
 use std::convert::From;
+use std::error::Error;
 use yaml::{Hash, Yaml};
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
         FmtError(fmt::Error),
         BadHashmapKey,
+}
+
+impl Error for EmitError {
+    fn description(&self) -> &str {
+        match *self {
+            EmitError::FmtError(ref err) => err.description(),
+            EmitError::BadHashmapKey => "bad hashmap key",
+        }
+    }
+}
+
+impl Display for EmitError {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            EmitError::FmtError(ref err) => Display::fmt(err, formatter),
+            EmitError::BadHashmapKey => formatter.write_str("bad hashmap key"),
+        }
+    }
 }
 
 impl From<fmt::Error> for EmitError {
