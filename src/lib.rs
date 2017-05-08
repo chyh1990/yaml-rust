@@ -36,11 +36,8 @@
 //!
 //! ```
 
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
-#![cfg_attr(feature="clippy", deny(clippy))]
-#![cfg_attr(feature="clippy", warn(cyclomatic_complexity))]
-#![cfg_attr(feature="clippy", allow(match_same_arms))]
+#![cfg_attr(feature = "cargo-clippy", warn(cyclomatic_complexity))]
+#![cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 
 extern crate linked_hash_map;
 

@@ -273,7 +273,7 @@ impl Yaml {
     }
 }
 
-#[cfg_attr(feature="clippy", allow(should_implement_trait))]
+#[cfg_attr(feature = "cargo-clippy", allow(should_implement_trait))]
 impl Yaml {
     // Not implementing FromStr because there is no possibility of Error.
     // This function falls back to Yaml::String if nothing else matches.
