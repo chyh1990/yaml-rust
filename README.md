@@ -26,28 +26,28 @@ See [Document](http://chyh1990.github.io/yaml-rust/doc/yaml_rust/)
 
 Add the following to the Cargo.toml of your project:
 
-```
+```toml
 [dependencies]
 yaml-rust = "*"
 ```
 
 or
 
-```
+```toml
 [dependencies.yaml-rust]
 git = "https://github.com/chyh1990/yaml-rust.git"
 ```
 
 and import using *extern crate*:
 
-```.rust
+```rust
 extern crate yaml_rust;
 ```
 
 Use `yaml::YamlLoader` to load the YAML documents and access it
 as Vec/HashMap:
 
-```.rust
+```rust
 extern crate yaml_rust;
 use yaml_rust::{YamlLoader, YamlEmitter};
 
