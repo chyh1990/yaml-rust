@@ -3,6 +3,15 @@ use std::convert::From;
 use std::error::Error;
 use yaml::{Hash, Yaml};
 
+/// If the emitter should output in 'compact inline notation' form, as
+/// described for block
+/// [sequences](http://www.yaml.org/spec/1.2/spec.html#id2797382) and
+/// [mappings](http://www.yaml.org/spec/1.2/spec.html#id2798057). In
+/// this form, blocks cannot have any properties (such as anchors or
+/// tags), which should be OK, because this emitter doesn't (currently)
+/// emit those anyways.
+pub const COMPACT: bool = true;
+
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
         FmtError(fmt::Error),
@@ -174,16 +183,16 @@ impl<'a> YamlEmitter<'a> {
         if v.is_empty() {
             try!(write!(self.writer, "[]"));
         } else {
+            self.level += 1;
             for (cnt, x) in v.iter().enumerate() {
                 if cnt > 0 {
                     try!(write!(self.writer, "\n"));
+                    try!(self.write_indent());
                 }
-                try!(self.write_indent());
-                self.level += 1;
-                try!(write!(self.writer, "- "));
-                try!(self.emit_node(x));
-                self.level -= 1;
+                try!(write!(self.writer, "-"));
+                try!(self.emit_val(true, x));
             }
+            self.level -= 1;
         }
         Ok(())
     }
@@ -203,50 +212,56 @@ impl<'a> YamlEmitter<'a> {
                     try!(self.write_indent());
                 }
                 if complex_key {
-                  try!(write!(self.writer, "? "));
-                  self.level += 1;
-                  try!(self.emit_node(k));
-                  self.level -= 1;
+                  try!(write!(self.writer, "?"));
+                  try!(self.emit_val(true, k));
                   try!(write!(self.writer, "\n"));
                   try!(self.write_indent());
+                  try!(write!(self.writer, ":"));
+                  try!(self.emit_val(true, v));
                 } else {
                   try!(self.emit_node(k));
-                }
-                match *v {
-                    Yaml::Array(ref v) => {
-                        if complex_key { self.level += 1; }
-                        if v.is_empty() {
-                            try!(write!(self.writer, ": "));
-                        } else {
-                            try!(write!(self.writer, ":\n"));
-                        }
-                        try!(self.emit_array(v));
-                        if complex_key { self.level -= 1; }
-                    }
-                    Yaml::Hash(ref h) => {
-                        if complex_key { self.level += 1; }
-                        if h.is_empty() {
-                            try!(write!(self.writer, ": "));
-                        } else {
-                            try!(write!(self.writer, ":\n"));
-                            self.level += 1;
-                            try!(self.write_indent());
-                            self.level -= 1;
-                        }
-                        try!(self.emit_hash(h));
-                        if complex_key { self.level -= 1; }
-                    }
-                    _ => {
-                        if complex_key { self.level += 1; }
-                        try!(write!(self.writer, ": "));
-                        try!(self.emit_node(v));
-                        if complex_key { self.level -= 1; }
-                    }
+                  try!(write!(self.writer, ":"));
+                  try!(self.emit_val(false, v));
                 }
             }
             self.level -= 1;
         }
         Ok(())
+    }
+
+    /// Emit a yaml as a hash or array value: i.e., which should appear
+    /// following a ":" or "-", either after a space, or on a new line.
+    /// If `inline` is true, then the preceeding characters are distinct
+    /// and short enough to respects the COMPACT constant.
+    fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
+        match *val {
+            Yaml::Array(ref v) => {
+                if (inline && COMPACT) || v.is_empty() {
+                    try!(write!(self.writer, " "));
+                } else {
+                    try!(write!(self.writer, "\n"));
+                    self.level += 1;
+                    try!(self.write_indent());
+                    self.level -= 1;
+                }
+                self.emit_array(v)
+            },
+            Yaml::Hash(ref h) => {
+                if (inline && COMPACT) || h.is_empty() {
+                    try!(write!(self.writer, " "));
+                } else {
+                    try!(write!(self.writer, "\n"));
+                    self.level += 1;
+                    try!(self.write_indent());
+                    self.level -= 1;
+                }
+                self.emit_hash(h)
+            },
+            _ => {
+                try!(write!(self.writer, " "));
+                self.emit_node(val)
+            }
+        }
     }
 }
 
@@ -406,15 +421,24 @@ y: string with spaces"#;
 
     #[test]
     fn test_empty_and_nested() {
-        let s = r#"---
+        let s = if COMPACT { r#"---
 a:
   b:
     c: hello
   d: {}
 e:
-- f
-- g
-- h: []"#;
+  - f
+  - g
+  - h: []"# } else { r#"---
+a:
+  b:
+    c: hello
+  d: {}
+e:
+  - f
+  - g
+  -
+    h: []"# };
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
