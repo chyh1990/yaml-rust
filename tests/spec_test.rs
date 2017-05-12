@@ -136,8 +136,6 @@ fn test_mapvec_legal() {
   //    - 6
   //  ```
 
-  println!("{}", out_str);
-
   YamlLoader::load_from_str(&out_str).unwrap();
 }
 
