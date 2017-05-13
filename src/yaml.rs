@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
 use std::i64;
+use std::f64;
 use std::mem;
 use std::vec;
 use parser::*;
@@ -226,6 +227,15 @@ pub fn $name(self) -> Option<$t> {
     );
 );
 
+fn parse_f64(v: &str) -> Option<f64> {
+    match v {
+        ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Some(f64::INFINITY),
+        "-.inf" | "-.Inf" | "-.INF" => Some(f64::NEG_INFINITY),
+        ".nan" | "NaN" | ".NAN" => Some(f64::NAN),
+        _ => v.parse::<f64>().ok()
+    }
+}
+
 impl Yaml {
     define_as!(as_bool, bool, Boolean);
     define_as!(as_i64, i64, Integer);
@@ -256,18 +266,14 @@ impl Yaml {
 
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
-            Yaml::Real(ref v) => {
-                v.parse::<f64>().ok()
-            },
+            Yaml::Real(ref v) => parse_f64(v),
             _ => None
         }
     }
 
     pub fn into_f64(self) -> Option<f64> {
         match self {
-            Yaml::Real(v) => {
-                v.parse::<f64>().ok()
-            },
+            Yaml::Real(ref v) => parse_f64(v),
             _ => None
         }
     }
@@ -299,7 +305,7 @@ impl Yaml {
             "false" => Yaml::Boolean(false),
             _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
             // try parsing as f64
-            _ if v.parse::<f64>().is_ok() => Yaml::Real(v.to_owned()),
+            _ if parse_f64(v).is_some() => Yaml::Real(v.to_owned()),
             _ => Yaml::String(v.to_owned())
         }
     }
@@ -356,6 +362,7 @@ impl Iterator for YamlIter {
 #[cfg(test)]
 mod test {
     use yaml::*;
+    use std::f64;
     #[test]
     fn test_coerce() {
         let s = "---
@@ -561,6 +568,8 @@ a1: &DEFAULT
 - 0xFF
 - 0o77
 - +12345
+- -.INF
+- .NAN
 ";
         let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
         let mut doc = out.next().unwrap().into_iter();
@@ -582,6 +591,8 @@ a1: &DEFAULT
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::NEG_INFINITY);
+        assert!(doc.next().unwrap().into_f64().is_some());
     }
 
     #[test]
