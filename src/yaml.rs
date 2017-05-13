@@ -55,6 +55,17 @@ pub enum Yaml {
 pub type Array = Vec<Yaml>;
 pub type Hash = LinkedHashMap<Yaml, Yaml>;
 
+// parse f64 as Core schema
+// See: https://github.com/chyh1990/yaml-rust/issues/51
+fn parse_f64(v: &str) -> Option<f64> {
+    match v {
+        ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Some(f64::INFINITY),
+        "-.inf" | "-.Inf" | "-.INF" => Some(f64::NEG_INFINITY),
+        ".nan" | "NaN" | ".NAN" => Some(f64::NAN),
+        _ => v.parse::<f64>().ok()
+    }
+}
+
 pub struct YamlLoader {
     docs: Vec<Yaml>,
     // states
@@ -116,9 +127,9 @@ impl MarkedEventReceiver for YamlLoader {
                                 }
                             },
                             "float" => {
-                                match v.parse::<f64>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(_) => Yaml::Real(v.clone())
+                                match parse_f64(v) {
+                                    Some(_) => Yaml::Real(v.clone()),
+                                    None => Yaml::BadValue,
                                 }
                             },
                             "null" => {
@@ -226,15 +237,6 @@ pub fn $name(self) -> Option<$t> {
 }
     );
 );
-
-fn parse_f64(v: &str) -> Option<f64> {
-    match v {
-        ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Some(f64::INFINITY),
-        "-.inf" | "-.Inf" | "-.INF" => Some(f64::NEG_INFINITY),
-        ".nan" | "NaN" | ".NAN" => Some(f64::NAN),
-        _ => v.parse::<f64>().ok()
-    }
-}
 
 impl Yaml {
     define_as!(as_bool, bool, Boolean);
@@ -570,6 +572,7 @@ a1: &DEFAULT
 - +12345
 - -.INF
 - .NAN
+- !!float .INF
 ";
         let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
         let mut doc = out.next().unwrap().into_iter();
@@ -593,6 +596,7 @@ a1: &DEFAULT
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
         assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::NEG_INFINITY);
         assert!(doc.next().unwrap().into_f64().is_some());
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::INFINITY);
     }
 
     #[test]
