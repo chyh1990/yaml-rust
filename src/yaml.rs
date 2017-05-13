@@ -526,6 +526,13 @@ a1: &DEFAULT
     }
 
     #[test]
+    fn test_issue_65() {
+        // See: https://github.com/chyh1990/yaml-rust/issues/65
+        let b = "\n\"ll\\\"ll\\\r\n\"ll\\\"ll\\\r\r\r\rU\r\r\rU";
+        assert!(YamlLoader::load_from_str(&b).is_err());
+    }
+
+    #[test]
     fn test_bad_docstart() {
         assert!(YamlLoader::load_from_str("---This used to cause an infinite loop").is_ok());
         assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
