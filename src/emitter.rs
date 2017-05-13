@@ -350,7 +350,7 @@ a7: 你好
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        let docs_new = YamlLoader::load_from_str(&writer).unwrap();
         let doc_new = &docs_new[0];
 
         assert_eq!(doc, doc_new);
@@ -384,7 +384,7 @@ products:
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        let docs_new = YamlLoader::load_from_str(&writer).unwrap();
         let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
     }
