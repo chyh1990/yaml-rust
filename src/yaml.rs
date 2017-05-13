@@ -330,9 +330,13 @@ impl Index<usize> for Yaml {
     type Output = Yaml;
 
     fn index(&self, idx: usize) -> &Yaml {
-        match self.as_vec() {
-            Some(v) => v.get(idx).unwrap_or(&BAD_VALUE),
-            None => &BAD_VALUE
+        if let Some(v) = self.as_vec() {
+            v.get(idx).unwrap_or(&BAD_VALUE)
+        } else if let Some(v) = self.as_hash() {
+            let key = Yaml::Integer(idx as i64);
+            v.get(&key).unwrap_or(&BAD_VALUE)
+        } else {
+            &BAD_VALUE
         }
     }
 }
@@ -613,5 +617,18 @@ c: ~
         assert_eq!(Some((Yaml::String("a".to_owned()), Yaml::Null)), iter.next());
         assert_eq!(Some((Yaml::String("c".to_owned()), Yaml::Null)), iter.next());
         assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_integer_key() {
+        let s = "
+0:
+    important: true
+1:
+    important: false
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        assert_eq!(first[0]["important"].as_bool().unwrap(), true);
     }
 }
