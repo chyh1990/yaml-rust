@@ -40,6 +40,8 @@
 #![cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 
 extern crate linked_hash_map;
+#[cfg(feature = "preserve_order")]
+pub use linked_hash_map::LinkedHashMap;
 
 pub mod yaml;
 pub mod scanner;
