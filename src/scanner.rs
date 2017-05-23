@@ -1294,12 +1294,12 @@ impl<T: Iterator<Item=char>> Scanner<T> {
                 }
                 self.lookahead(2);
             }
+            self.lookahead(1);
             match self.ch() {
                 '\'' if single => { break; },
                 '"' if !single => { break; },
                 _ => {}
             }
-            self.lookahead(1);
 
             // Consume blank characters.
             while is_blank(self.ch()) || is_break(self.ch()) {

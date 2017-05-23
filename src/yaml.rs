@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Index;
 use std::string;
 use std::i64;
+use std::f64;
 use std::mem;
 use std::vec;
 use parser::*;
@@ -53,6 +54,17 @@ pub enum Yaml {
 
 pub type Array = Vec<Yaml>;
 pub type Hash = LinkedHashMap<Yaml, Yaml>;
+
+// parse f64 as Core schema
+// See: https://github.com/chyh1990/yaml-rust/issues/51
+fn parse_f64(v: &str) -> Option<f64> {
+    match v {
+        ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Some(f64::INFINITY),
+        "-.inf" | "-.Inf" | "-.INF" => Some(f64::NEG_INFINITY),
+        ".nan" | "NaN" | ".NAN" => Some(f64::NAN),
+        _ => v.parse::<f64>().ok()
+    }
+}
 
 pub struct YamlLoader {
     docs: Vec<Yaml>,
@@ -115,9 +127,9 @@ impl MarkedEventReceiver for YamlLoader {
                                 }
                             },
                             "float" => {
-                                match v.parse::<f64>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(_) => Yaml::Real(v.clone())
+                                match parse_f64(v) {
+                                    Some(_) => Yaml::Real(v.clone()),
+                                    None => Yaml::BadValue,
                                 }
                             },
                             "null" => {
@@ -256,18 +268,14 @@ impl Yaml {
 
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
-            Yaml::Real(ref v) => {
-                v.parse::<f64>().ok()
-            },
+            Yaml::Real(ref v) => parse_f64(v),
             _ => None
         }
     }
 
     pub fn into_f64(self) -> Option<f64> {
         match self {
-            Yaml::Real(v) => {
-                v.parse::<f64>().ok()
-            },
+            Yaml::Real(ref v) => parse_f64(v),
             _ => None
         }
     }
@@ -299,7 +307,7 @@ impl Yaml {
             "false" => Yaml::Boolean(false),
             _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
             // try parsing as f64
-            _ if v.parse::<f64>().is_ok() => Yaml::Real(v.to_owned()),
+            _ if parse_f64(v).is_some() => Yaml::Real(v.to_owned()),
             _ => Yaml::String(v.to_owned())
         }
     }
@@ -322,9 +330,13 @@ impl Index<usize> for Yaml {
     type Output = Yaml;
 
     fn index(&self, idx: usize) -> &Yaml {
-        match self.as_vec() {
-            Some(v) => v.get(idx).unwrap_or(&BAD_VALUE),
-            None => &BAD_VALUE
+        if let Some(v) = self.as_vec() {
+            v.get(idx).unwrap_or(&BAD_VALUE)
+        } else if let Some(v) = self.as_hash() {
+            let key = Yaml::Integer(idx as i64);
+            v.get(&key).unwrap_or(&BAD_VALUE)
+        } else {
+            &BAD_VALUE
         }
     }
 }
@@ -356,6 +368,7 @@ impl Iterator for YamlIter {
 #[cfg(test)]
 mod test {
     use yaml::*;
+    use std::f64;
     #[test]
     fn test_coerce() {
         let s = "---
@@ -526,6 +539,13 @@ a1: &DEFAULT
     }
 
     #[test]
+    fn test_issue_65() {
+        // See: https://github.com/chyh1990/yaml-rust/issues/65
+        let b = "\n\"ll\\\"ll\\\r\n\"ll\\\"ll\\\r\r\r\rU\r\r\rU";
+        assert!(YamlLoader::load_from_str(&b).is_err());
+    }
+
+    #[test]
     fn test_bad_docstart() {
         assert!(YamlLoader::load_from_str("---This used to cause an infinite loop").is_ok());
         assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
@@ -554,6 +574,9 @@ a1: &DEFAULT
 - 0xFF
 - 0o77
 - +12345
+- -.INF
+- .NAN
+- !!float .INF
 ";
         let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
         let mut doc = out.next().unwrap().into_iter();
@@ -575,6 +598,9 @@ a1: &DEFAULT
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::NEG_INFINITY);
+        assert!(doc.next().unwrap().into_f64().is_some());
+        assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::INFINITY);
     }
 
     #[test]
@@ -591,5 +617,18 @@ c: ~
         assert_eq!(Some((Yaml::String("a".to_owned()), Yaml::Null)), iter.next());
         assert_eq!(Some((Yaml::String("c".to_owned()), Yaml::Null)), iter.next());
         assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_integer_key() {
+        let s = "
+0:
+    important: true
+1:
+    important: false
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        assert_eq!(first[0]["important"].as_bool().unwrap(), true);
     }
 }
