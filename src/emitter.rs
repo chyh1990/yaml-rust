@@ -3,14 +3,6 @@ use std::convert::From;
 use std::error::Error;
 use yaml::{Hash, Yaml};
 
-/// If the emitter should output in 'compact inline notation' form, as
-/// described for block
-/// [sequences](http://www.yaml.org/spec/1.2/spec.html#id2797382) and
-/// [mappings](http://www.yaml.org/spec/1.2/spec.html#id2798057). In
-/// this form, blocks cannot have any properties (such as anchors or
-/// tags), which should be OK, because this emitter doesn't (currently)
-/// emit those anyways.
-pub const COMPACT: bool = true;
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
@@ -45,6 +37,7 @@ impl From<fmt::Error> for EmitError {
 pub struct YamlEmitter<'a> {
     writer: &'a mut fmt::Write,
     best_indent: usize,
+    compact: bool,
 
     level: isize,
 }
@@ -119,9 +112,27 @@ impl<'a> YamlEmitter<'a> {
         YamlEmitter {
             writer: writer,
             best_indent: 2,
+            compact: true,
 
             level: -1
         }
+    }
+
+    /// Set 'compact inline notation' on or off, as described for block
+    /// [sequences](http://www.yaml.org/spec/1.2/spec.html#id2797382)
+    /// and
+    /// [mappings](http://www.yaml.org/spec/1.2/spec.html#id2798057).
+    ///
+    /// In this form, blocks cannot have any properties (such as anchors
+    /// or tags), which should be OK, because this emitter doesn't
+    /// (currently) emit those anyways.
+    pub fn compact(&mut self, compact: bool) {
+      self.compact = compact;
+    }
+
+    /// Determine if this emitter is using 'compact inline notation'.
+    pub fn is_compact(&self) -> bool {
+      self.compact
     }
 
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
@@ -232,11 +243,11 @@ impl<'a> YamlEmitter<'a> {
     /// Emit a yaml as a hash or array value: i.e., which should appear
     /// following a ":" or "-", either after a space, or on a new line.
     /// If `inline` is true, then the preceeding characters are distinct
-    /// and short enough to respects the COMPACT constant.
+    /// and short enough to respect the compact flag.
     fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
         match *val {
             Yaml::Array(ref v) => {
-                if (inline && COMPACT) || v.is_empty() {
+                if (inline && self.compact) || v.is_empty() {
                     try!(write!(self.writer, " "));
                 } else {
                     try!(write!(self.writer, "\n"));
@@ -247,7 +258,7 @@ impl<'a> YamlEmitter<'a> {
                 self.emit_array(v)
             },
             Yaml::Hash(ref h) => {
-                if (inline && COMPACT) || h.is_empty() {
+                if (inline && self.compact) || h.is_empty() {
                     try!(write!(self.writer, " "));
                 } else {
                     try!(write!(self.writer, "\n"));
@@ -421,7 +432,16 @@ y: string with spaces"#;
 
     #[test]
     fn test_empty_and_nested() {
-        let s = if COMPACT { r#"---
+      test_empty_and_nested_flag(false)
+    }
+
+    #[test]
+    fn test_empty_and_nested_compact() {
+      test_empty_and_nested_flag(true)
+    }
+
+    fn test_empty_and_nested_flag(compact: bool) {
+        let s = if compact { r#"---
 a:
   b:
     c: hello
@@ -445,6 +465,7 @@ e:
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.compact(compact);
             emitter.dump(doc).unwrap();
         }
 
