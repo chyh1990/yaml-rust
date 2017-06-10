@@ -134,39 +134,8 @@ impl<'a> YamlEmitter<'a> {
 
     fn emit_node_compact(&mut self, node: &Yaml) -> EmitResult {
         match *node {
-            Yaml::Array(ref v) => {
-                    try!(write!(self.writer, "["));
-                    if self.level >= 0 {
-                        try!(write!(self.writer, ""));
-                    }
-                    for (cnt, x) in v.iter().enumerate() {
-                        if cnt > 0 { try!(write!(self.writer, ", ")); }
-                        try!(self.emit_node(x));
-                    }
-                    try!(write!(self.writer, "]"));
-                    Ok(())
-            },
-            Yaml::Hash(ref h) => {
-                    try!(self.writer.write_str("{"));
-                    self.level += 1;
-                    for (cnt, (k, v)) in h.iter().enumerate() {
-                        if cnt > 0 {
-                            try!(write!(self.writer, ", "));
-                        }
-                        match *k {
-                            // complex key is not supported
-                            Yaml::Array(_) | Yaml::Hash(_) => {
-                                return Err(EmitError::BadHashmapKey);
-                            },
-                            _ => { try!(self.emit_node(k)); }
-                        }
-                        try!(write!(self.writer, ": "));
-                        try!(self.emit_node(v));
-                    }
-                    try!(self.writer.write_str("}"));
-                    self.level -= 1;
-                    Ok(())
-            },
+            Yaml::Array(ref v) => self.emit_array_compact(v),
+            Yaml::Hash(ref h) => self.emit_hash_compact(h),
             _ => self.emit_node(node),
         }
     }
@@ -213,16 +182,33 @@ impl<'a> YamlEmitter<'a> {
             try!(write!(self.writer, "[]"));
         } else {
             for (cnt, x) in v.iter().enumerate() {
+                self.level += 1;
                 if cnt > 0 {
                     try!(write!(self.writer, "\n"));
                 }
                 try!(self.write_indent());
-                self.level += 1;
                 try!(write!(self.writer, "- "));
-                try!(self.emit_node(x));
+                if self.level >= 1 && x.is_array() {
+                    try!(self.emit_node_compact(x));
+                } else {
+                  try!(self.emit_node(x));
+                }
                 self.level -= 1;
             }
         }
+        Ok(())
+    }
+
+    fn emit_array_compact(&mut self, v: &[Yaml]) -> EmitResult {
+        try!(write!(self.writer, "["));
+        if self.level >= 0 {
+            try!(write!(self.writer, ""));
+        }
+        for (cnt, x) in v.iter().enumerate() {
+            if cnt > 0 { try!(write!(self.writer, ", ")); }
+            try!(self.emit_node(x));
+        }
+        try!(write!(self.writer, "]"));
         Ok(())
     }
 
@@ -274,6 +260,29 @@ impl<'a> YamlEmitter<'a> {
         }
         Ok(())
     }
+
+    fn emit_hash_compact(&mut self, h: &Hash) -> EmitResult {
+        try!(self.writer.write_str("{"));
+        self.level += 1;
+        for (cnt, (k, v)) in h.iter().enumerate() {
+            if cnt > 0 {
+                try!(write!(self.writer, ", "));
+            }
+            match *k {
+                // complex key is not supported
+                Yaml::Array(_) | Yaml::Hash(_) => {
+                    return Err(EmitError::BadHashmapKey);
+                },
+                _ => { try!(self.emit_node(k)); }
+            }
+            try!(write!(self.writer, ": "));
+            try!(self.emit_node(v));
+        }
+        try!(self.writer.write_str("}"));
+        self.level -= 1;
+        Ok(())
+    }
+
 }
 
 /// Check if the string requires quoting.
@@ -315,7 +324,7 @@ fn need_quotes(string: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use YamlLoader;
 
@@ -330,15 +339,8 @@ a1:
 a2: 4 # i'm comment
 a3: [1, 2, 3]
 a4:
-    - - a1
-      - a2
+    - [a1, a2]
     - 2
-    - []
-    - {}
-a5: 'single_quoted'
-a6: \"double_quoted\"
-a7: 你好
-'key 1': \"ddd\\\tbbb\"
 ";
 
 
@@ -349,7 +351,12 @@ a7: 你好
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+        let docs_new = match YamlLoader::load_from_str(&writer) {
+            Ok(y) => y,
+            Err(e) => panic!(format!("{}", e))
+        };
         let doc_new = &docs_new[0];
 
         assert_eq!(doc, doc_new);
@@ -383,7 +390,10 @@ products:
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        let docs_new = match YamlLoader::load_from_str(&writer) {
+            Ok(y) => y,
+            Err(e) => panic!(format!("{}", e))
+        };
         let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
     }
@@ -470,6 +480,9 @@ bool1: false"#;
         assert_eq!(expected, writer, "actual:\n\n{}\n", writer);
     }
 
+//(left: `"---\na:\n  b:\n    c: hello\n  d: {}\ne:\n- f\n- g\n- h: []"`,
+//right: `"---\na:\n  b:\n    c: hello\n  d: {}\ne:\n  - f\n  - g\n  - h: []"`)
+
     #[test]
     fn test_empty_and_nested() {
         let s = r#"---
@@ -478,9 +491,9 @@ a:
     c: hello
   d: {}
 e:
-- f
-- g
-- h: []"#;
+  - f
+  - g
+  - h: []"#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];

@@ -266,6 +266,13 @@ impl Yaml {
         }
     }
 
+    pub fn is_array(&self) -> bool {
+        match *self {
+            Yaml::Array(_) => true,
+            _ => false
+        }
+    }
+
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             Yaml::Real(ref v) => parse_f64(v),
