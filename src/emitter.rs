@@ -142,7 +142,7 @@ impl<'a> YamlEmitter<'a> {
 
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
         match *node {
-            Yaml::Array(ref v) => self.emit_array(v),
+            Yaml::Array(ref v) => self.emit_array(v, !node.is_array()),
             Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
                 if need_quotes(v) {
@@ -177,7 +177,7 @@ impl<'a> YamlEmitter<'a> {
         }
     }
 
-    fn emit_array(&mut self, v: &[Yaml]) -> EmitResult {
+    fn emit_array(&mut self, v: &[Yaml], indent_first: bool) -> EmitResult {
         if v.is_empty() {
             try!(write!(self.writer, "[]"));
         } else {
@@ -186,12 +186,14 @@ impl<'a> YamlEmitter<'a> {
                 if cnt > 0 {
                     try!(write!(self.writer, "\n"));
                 }
-                try!(self.write_indent());
+                if cnt > 0 || indent_first {
+                    try!(self.write_indent());
+                }
                 try!(write!(self.writer, "- "));
-                if self.level >= 1 && x.is_array() {
+                if self.level > 2 {
                     try!(self.emit_node_compact(x));
                 } else {
-                  try!(self.emit_node(x));
+                    try!(self.emit_node(x));
                 }
                 self.level -= 1;
             }
@@ -237,7 +239,7 @@ impl<'a> YamlEmitter<'a> {
                         } else {
                             try!(write!(self.writer, ":\n"));
                         }
-                        try!(self.emit_array(v));
+                        try!(self.emit_array(v, true));
                     }
                     Yaml::Hash(ref h) => {
                         if h.is_empty() {
@@ -480,9 +482,6 @@ bool1: false"#;
         assert_eq!(expected, writer, "actual:\n\n{}\n", writer);
     }
 
-//(left: `"---\na:\n  b:\n    c: hello\n  d: {}\ne:\n- f\n- g\n- h: []"`,
-//right: `"---\na:\n  b:\n    c: hello\n  d: {}\ne:\n  - f\n  - g\n  - h: []"`)
-
     #[test]
     fn test_empty_and_nested() {
         let s = r#"---
@@ -505,4 +504,73 @@ e:
 
         assert_eq!(s, writer);
     }
+
+    #[test]
+    fn test_nested_arrays() {
+        let s = r#"---
+a:
+  - b
+  - - c
+    - d
+    - - e
+      - f"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
+    #[test]
+    fn test_deeply_nested_arrays() {
+        let s = r#"---
+a:
+  - b
+  - - c
+    - d
+    - - e
+      - [f, e]"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
+    #[test]
+    fn test_nested_hashes() {
+        let s = r#"---
+a:
+  b:
+    c:
+      d:
+        e: f"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
 }
