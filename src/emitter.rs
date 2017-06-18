@@ -208,7 +208,7 @@ impl<'a> YamlEmitter<'a> {
         }
         for (cnt, x) in v.iter().enumerate() {
             if cnt > 0 { try!(write!(self.writer, ", ")); }
-            try!(self.emit_node(x));
+            try!(self.emit_node_compact(x));
         }
         try!(write!(self.writer, "]"));
         Ok(())
@@ -278,7 +278,7 @@ impl<'a> YamlEmitter<'a> {
                 _ => { try!(self.emit_node(k)); }
             }
             try!(write!(self.writer, ": "));
-            try!(self.emit_node(v));
+            try!(self.emit_node_compact(v));
         }
         try!(self.writer.write_str("}"));
         self.level -= 1;
@@ -482,6 +482,9 @@ bool1: false"#;
         assert_eq!(expected, writer, "actual:\n\n{}\n", writer);
     }
 
+// (left: `"---\na:\n  b:\n    c: hello\n  d: {}\ne:\n  - f\n  - - foo\n    - - [[1, 2]]\n  - g: {}\n  - h: []\ni:\n  - - - [[[[1]]]]\n    - - [[[[1], 2]]]\n      - [[[[1], 2], 3]]\n    - - [[[[1], 2], 3, {}]]\nj:\n  - - - {k: {l: m}}\n\"n\":\n  - - - {o: {p: [q, [r, s]]}}\n"`,
+// right: `"---\na:\n  b:\n    c: hello\n  d: {}\ne:\n  - f\n  - - foo\n    - - [[1, 2]]\n  - g: {}\n  - h: []\ni:\n  - - - [[[[1]]]]\n    - - [[[[1], 2]]]\n      - [[[[1], 2], 3]]\n    - - [[[[1], 2], 3, {}]]\nj:\n  - - - {k: {l: m}}\n\"n\":\n  - - - {o: {p: [q, [r, s]]}}"`)', src/emitter.rs:519
+
     #[test]
     fn test_empty_and_nested() {
         let s = r#"---
@@ -491,8 +494,19 @@ a:
   d: {}
 e:
   - f
-  - g
-  - h: []"#;
+  - - foo
+    - - [[1, 2]]
+  - g: {}
+  - h: []
+i:
+  - - - [[[[1]]]]
+    - - [[[[1], 2]]]
+      - [[[[1], 2], 3]]
+    - - [[[[1], 2], 3, {}]]
+j:
+  - - - {k: {l: m}}
+"n":
+  - - - {o: {p: [q, [r, s]]}}"#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
@@ -502,6 +516,8 @@ e:
             emitter.dump(doc).unwrap();
         }
 
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
         assert_eq!(s, writer);
     }
 
