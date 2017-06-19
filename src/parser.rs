@@ -76,21 +76,19 @@ pub struct Parser<T> {
 
 
 pub trait EventReceiver {
-    fn on_event(&mut self, ev: &Event);
+    fn on_event(&mut self, ev: Event);
 }
 
 
 pub trait MarkedEventReceiver {
-    fn on_event(&mut self, ev: &Event, _mark: Marker);
+    fn on_event(&mut self, ev: Event, _mark: Marker);
 }
 
 impl<R: EventReceiver> MarkedEventReceiver for R {
-    fn on_event(&mut self, ev: &Event, _mark: Marker) {
+    fn on_event(&mut self, ev: Event, _mark: Marker) {
         self.on_event(ev)
     }
 }
-
-
 
 pub type ParseResult = Result<(Event, Marker), ScanError>;
 
@@ -136,38 +134,37 @@ impl<T: Iterator<Item=char>> Parser<T> {
         self.states.push(state);
     }
 
-    fn parse<R: MarkedEventReceiver>(&mut self, recv: &mut R)
-        -> Result<Event, ScanError> {
+    fn parse(&mut self) -> ParseResult {
         if self.state == State::End {
-            return Ok(Event::StreamEnd);
+            return Ok((Event::StreamEnd, self.scanner.mark()));
         }
         let (ev, mark) = try!(self.state_machine());
         // println!("EV {:?}", ev);
-        recv.on_event(&ev, mark);
-        Ok(ev)
+        Ok((ev, mark))
     }
 
     pub fn load<R: MarkedEventReceiver>(&mut self, recv: &mut R, multi: bool)
         -> Result<(), ScanError> {
         if !self.scanner.stream_started() {
-            let ev = try!(self.parse(recv));
+            let (ev, mark) = try!(self.parse());
             assert_eq!(ev, Event::StreamStart);
+            recv.on_event(ev, mark);
         }
 
         if self.scanner.stream_ended() {
             // XXX has parsed?
-            recv.on_event(&Event::StreamEnd, self.scanner.mark());
+            recv.on_event(Event::StreamEnd, self.scanner.mark());
             return Ok(());
         }
         loop {
-            let ev = try!(self.parse(recv));
+            let (ev, mark) = try!(self.parse());
             if ev == Event::StreamEnd {
-                recv.on_event(&Event::StreamEnd, self.scanner.mark());
+                recv.on_event(ev, mark);
                 return Ok(());
             }
             // clear anchors before a new document
             self.anchors.clear();
-            try!(self.load_document(&ev, recv));
+            try!(self.load_document(ev, mark, recv));
             if !multi {
                 break;
             }
@@ -175,63 +172,75 @@ impl<T: Iterator<Item=char>> Parser<T> {
         Ok(())
     }
 
-    fn load_document<R: MarkedEventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+    fn load_document<R: MarkedEventReceiver>(&mut self, first_ev: Event, mark: Marker, recv: &mut R)
         -> Result<(), ScanError> {
-        assert_eq!(first_ev, &Event::DocumentStart);
+        assert_eq!(first_ev, Event::DocumentStart);
+        recv.on_event(first_ev, mark);
 
-        let ev = try!(self.parse(recv));
-        try!(self.load_node(&ev, recv));
+        let (ev, mark) = try!(self.parse());
+        try!(self.load_node(ev, mark, recv));
 
         // DOCUMENT-END is expected.
-        let ev = try!(self.parse(recv));
+        let (ev, mark) = try!(self.parse());
         assert_eq!(ev, Event::DocumentEnd);
+        recv.on_event(ev, mark);
 
         Ok(())
     }
 
-    fn load_node<R: MarkedEventReceiver>(&mut self, first_ev: &Event, recv: &mut R)
+    fn load_node<R: MarkedEventReceiver>(&mut self, first_ev: Event, mark: Marker, recv: &mut R)
         -> Result<(), ScanError> {
-        match *first_ev {
+        match first_ev {
             Event::Alias(..) | Event::Scalar(..) => {
+                recv.on_event(first_ev, mark);
                 Ok(())
             },
             Event::SequenceStart(_) => {
-                self.load_sequence(first_ev, recv)
+                recv.on_event(first_ev, mark);
+                self.load_sequence(recv)
             },
             Event::MappingStart(_) => {
-                self.load_mapping(first_ev, recv)
+                recv.on_event(first_ev, mark);
+                self.load_mapping(recv)
             },
             _ => { println!("UNREACHABLE EVENT: {:?}", first_ev);
                 unreachable!(); }
         }
     }
 
-    fn load_mapping<R: MarkedEventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
+    fn load_mapping<R: MarkedEventReceiver>(&mut self, recv: &mut R)
         -> Result<(), ScanError> {
-        let mut ev = try!(self.parse(recv));
-        while ev != Event::MappingEnd {
+        let (mut key_ev, mut key_mark) = try!(self.parse());
+        while key_ev != Event::MappingEnd {
             // key
-            try!(self.load_node(&ev, recv));
+            try!(self.load_node(key_ev, key_mark, recv));
 
             // value
-            ev = try!(self.parse(recv));
-            try!(self.load_node(&ev, recv));
+            let (ev, mark) = try!(self.parse());
+            try!(self.load_node(ev, mark, recv));
 
             // next event
-            ev = try!(self.parse(recv));
+            let (ev, mark) = try!(self.parse());
+            key_ev = ev;
+            key_mark = mark;
+
         }
+        recv.on_event(key_ev, key_mark);
         Ok(())
     }
 
-    fn load_sequence<R: MarkedEventReceiver>(&mut self, _first_ev: &Event, recv: &mut R)
+    fn load_sequence<R: MarkedEventReceiver>(&mut self, recv: &mut R)
         -> Result<(), ScanError> {
-        let mut ev = try!(self.parse(recv));
+        let (mut ev, mut mark) = try!(self.parse());
         while ev != Event::SequenceEnd {
-            try!(self.load_node(&ev, recv));
+            try!(self.load_node(ev, mark, recv));
 
             // next event
-            ev = try!(self.parse(recv));
+            let (next_ev, next_mark) = try!(self.parse());
+            ev = next_ev;
+            mark = next_mark;
         }
+        recv.on_event(ev, mark);
         Ok(())
     }
 
