@@ -75,8 +75,8 @@ pub struct YamlLoader {
     anchor_map: BTreeMap<usize, Yaml>,
 }
 
-impl MarkedOwnedEventReceiver for YamlLoader {
-    fn on_owned_event(&mut self, ev: Event, _: Marker) {
+impl MarkedEventReceiver for YamlLoader {
+    fn on_event(&mut self, ev: Event, _: Marker) {
         // println!("EV {:?}", ev);
         match ev {
             Event::DocumentStart => {
