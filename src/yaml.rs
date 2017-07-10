@@ -76,9 +76,9 @@ pub struct YamlLoader {
 }
 
 impl MarkedEventReceiver for YamlLoader {
-    fn on_event(&mut self, ev: &Event, _: Marker) {
+    fn on_event(&mut self, ev: Event, _: Marker) {
         // println!("EV {:?}", ev);
-        match *ev {
+        match ev {
             Event::DocumentStart => {
                 // do nothing
             },
@@ -106,10 +106,10 @@ impl MarkedEventReceiver for YamlLoader {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             },
-            Event::Scalar(ref v, style, aid, ref tag) => {
+            Event::Scalar(v, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
-                    Yaml::String(v.clone())
-                } else if let Some(TokenType::Tag(ref handle, ref suffix)) = *tag {
+                    Yaml::String(v)
+                } else if let Some(TokenType::Tag(ref handle, ref suffix)) = tag {
                     // XXX tag:yaml.org,2002:
                     if handle == "!!" {
                         match suffix.as_ref() {
@@ -127,8 +127,8 @@ impl MarkedEventReceiver for YamlLoader {
                                 }
                             },
                             "float" => {
-                                match parse_f64(v) {
-                                    Some(_) => Yaml::Real(v.clone()),
+                                match parse_f64(&v) {
+                                    Some(_) => Yaml::Real(v),
                                     None => Yaml::BadValue,
                                 }
                             },
@@ -138,14 +138,14 @@ impl MarkedEventReceiver for YamlLoader {
                                     _ => Yaml::BadValue,
                                 }
                             }
-                            _  => Yaml::String(v.clone()),
+                            _  => Yaml::String(v),
                         }
                     } else {
-                        Yaml::String(v.clone())
+                        Yaml::String(v)
                     }
                 } else {
                     // Datatype is not specified, or unrecognized
-                    Yaml::from_str(v.as_ref())
+                    Yaml::from_str(&v)
                 };
 
                 self.insert_new_node((node, aid));
@@ -262,6 +262,13 @@ impl Yaml {
     pub fn is_badvalue(&self) -> bool {
         match *self {
             Yaml::BadValue => true,
+            _ => false
+        }
+    }
+
+    pub fn is_array(&self) -> bool {
+        match *self {
+            Yaml::Array(_) => true,
             _ => false
         }
     }

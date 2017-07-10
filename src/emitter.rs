@@ -302,17 +302,20 @@ fn need_quotes(string: &str) -> bool {
             _ => false,
         }
     })
-    || string == "true"
-    || string == "false"
-    || string == "null"
-    || string == "~"
+    || [// http://yaml.org/type/bool.html
+        "y","Y","yes","Yes","YES","n","N","no","No","NO",
+        "True", "TRUE", "true", "False", "FALSE", "false",
+        "on","On","ON","off","Off","OFF",
+        // http://yaml.org/type/null.html
+        "null","Null","NULL", "~"
+    ].contains(&string)
     || string.starts_with('.')
     || string.parse::<i64>().is_ok()
     || string.parse::<f64>().is_ok()
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use YamlLoader;
 
@@ -327,15 +330,8 @@ a1:
 a2: 4 # i'm comment
 a3: [1, 2, 3]
 a4:
-    - - a1
-      - a2
+    - [a1, a2]
     - 2
-    - []
-    - {}
-a5: 'single_quoted'
-a6: \"double_quoted\"
-a7: 你好
-'key 1': \"ddd\\\tbbb\"
 ";
 
 
@@ -346,7 +342,12 @@ a7: 你好
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+        let docs_new = match YamlLoader::load_from_str(&writer) {
+            Ok(y) => y,
+            Err(e) => panic!(format!("{}", e))
+        };
         let doc_new = &docs_new[0];
 
         assert_eq!(doc, doc_new);
@@ -380,7 +381,10 @@ products:
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        let docs_new = YamlLoader::load_from_str(&s).unwrap();
+        let docs_new = match YamlLoader::load_from_str(&writer) {
+            Ok(y) => y,
+            Err(e) => panic!(format!("{}", e))
+        };
         let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
     }
@@ -417,7 +421,8 @@ products:
   "true": bool key
   "{}": empty hash key
 x: test
-y: string with spaces"#;
+"y": "can't avoid quoting here"
+z: string with spaces"#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
@@ -428,6 +433,64 @@ y: string with spaces"#;
         }
 
         assert_eq!(s, writer, "actual:\n\n{}\n", writer);
+    }
+
+    #[test]
+    fn emit_quoted_bools() {
+        let input = r#"---
+string0: yes
+string1: no
+string2: "true"
+string3: "false"
+string4: "~"
+null0: ~
+[true, false]: real_bools
+[True, TRUE, False, FALSE, y,Y,yes,Yes,YES,n,N,no,No,NO,on,On,ON,off,Off,OFF]: false_bools
+bool0: true
+bool1: false"#;
+        let expected = r#"---
+string0: "yes"
+string1: "no"
+string2: "true"
+string3: "false"
+string4: "~"
+null0: ~
+? - true
+  - false
+: real_bools
+? - "True"
+  - "TRUE"
+  - "False"
+  - "FALSE"
+  - "y"
+  - "Y"
+  - "yes"
+  - "Yes"
+  - "YES"
+  - "n"
+  - "N"
+  - "no"
+  - "No"
+  - "NO"
+  - "on"
+  - "On"
+  - "ON"
+  - "off"
+  - "Off"
+  - "OFF"
+: false_bools
+bool0: true
+bool1: false"#;
+
+        let docs = YamlLoader::load_from_str(&input).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+
+        assert_eq!(expected, writer, "actual:\n\n{}\n", writer);
     }
 
     #[test]
@@ -471,4 +534,74 @@ e:
 
         assert_eq!(s, writer);
     }
+
+    #[test]
+    fn test_nested_arrays() {
+        let s = r#"---
+a:
+  - b
+  - - c
+    - d
+    - - e
+      - f"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
+    #[test]
+    fn test_deeply_nested_arrays() {
+        let s = r#"---
+a:
+  - b
+  - - c
+    - d
+    - - e
+      - - f
+      - - e"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
+    #[test]
+    fn test_nested_hashes() {
+        let s = r#"---
+a:
+  b:
+    c:
+      d:
+        e: f"#;
+
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
 }
