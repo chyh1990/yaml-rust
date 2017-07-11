@@ -72,6 +72,7 @@ pub struct Parser<T> {
     token: Option<Token>,
     anchors: HashMap<String, usize>,
     anchor_id: usize,
+    tag_directives: HashMap<String, String>
 }
 
 
@@ -104,6 +105,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             anchors: HashMap::new(),
             // valid anchor_id starts from 1
             anchor_id: 1,
+            tag_directives: HashMap::new()
         }
     }
 
@@ -344,14 +346,14 @@ impl<T: Iterator<Item=char>> Parser<T> {
                     //        "found incompatible YAML document"));
                     //}
                 },
-                TokenType::TagDirective(..) => {
-                    // TODO add tag directive
+                TokenType::TagDirective(handle, mut prefix) => {
+                    prefix.pop(); //Remove :
+                    self.tag_directives.insert(handle , prefix);
                 },
                 _ => break
             }
             self.skip();
         }
-        // TODO tag directive
         Ok(())
     }
 
@@ -455,7 +457,19 @@ impl<T: Iterator<Item=char>> Parser<T> {
             TokenType::Scalar(style, v) => {
                 self.pop_state();
                 self.skip();
-                Ok((Event::Scalar(v, style, anchor_id, tag), tok.0))
+
+                Ok((if let Some(TokenType::Tag(handle, suffix)) = tag{
+                    let t = self.tag_directives.get(&handle);
+                    Event::Scalar(v, style, anchor_id, Some(
+                        if let Some(s) = t {
+                            TokenType::Tag((*s).clone() , suffix)
+                        } else {
+                            TokenType::Tag(handle , suffix)
+                        }
+                    ))
+                } else {
+                    Event::Scalar(v, style, anchor_id, tag)
+                }, tok.0))
             },
             TokenType::FlowSequenceStart => {
                 self.state = State::FlowSequenceFirstEntry;
