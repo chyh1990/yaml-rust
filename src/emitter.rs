@@ -3,6 +3,7 @@ use std::convert::From;
 use std::error::Error;
 use yaml::{Hash, Yaml};
 
+
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
         FmtError(fmt::Error),
@@ -36,6 +37,7 @@ impl From<fmt::Error> for EmitError {
 pub struct YamlEmitter<'a> {
     writer: &'a mut fmt::Write,
     best_indent: usize,
+    compact: bool,
 
     level: isize,
 }
@@ -110,9 +112,27 @@ impl<'a> YamlEmitter<'a> {
         YamlEmitter {
             writer: writer,
             best_indent: 2,
+            compact: true,
 
             level: -1
         }
+    }
+
+    /// Set 'compact inline notation' on or off, as described for block
+    /// [sequences](http://www.yaml.org/spec/1.2/spec.html#id2797382)
+    /// and
+    /// [mappings](http://www.yaml.org/spec/1.2/spec.html#id2798057).
+    ///
+    /// In this form, blocks cannot have any properties (such as anchors
+    /// or tags), which should be OK, because this emitter doesn't
+    /// (currently) emit those anyways.
+    pub fn compact(&mut self, compact: bool) {
+      self.compact = compact;
+    }
+
+    /// Determine if this emitter is using 'compact inline notation'.
+    pub fn is_compact(&self) -> bool {
+      self.compact
     }
 
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
@@ -132,22 +152,15 @@ impl<'a> YamlEmitter<'a> {
         Ok(())
     }
 
-    fn emit_node_compact(&mut self, node: &Yaml) -> EmitResult {
-        match *node {
-            Yaml::Array(ref v) => self.emit_array_compact(v),
-            Yaml::Hash(ref h) => self.emit_hash_compact(h),
-            _ => self.emit_node(node),
-        }
-    }
-
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
         match *node {
-            Yaml::Array(ref v) => self.emit_array(v, !node.is_array()),
+            Yaml::Array(ref v) => self.emit_array(v),
             Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
                 if need_quotes(v) {
                     try!(escape_str(self.writer, v));
-                } else {
+                }
+                else {
                     try!(write!(self.writer, "{}", v));
                 }
                 Ok(())
@@ -177,40 +190,21 @@ impl<'a> YamlEmitter<'a> {
         }
     }
 
-    fn emit_array(&mut self, v: &[Yaml], indent_first: bool) -> EmitResult {
+    fn emit_array(&mut self, v: &[Yaml]) -> EmitResult {
         if v.is_empty() {
             try!(write!(self.writer, "[]"));
         } else {
+            self.level += 1;
             for (cnt, x) in v.iter().enumerate() {
-                self.level += 1;
                 if cnt > 0 {
                     try!(write!(self.writer, "\n"));
-                }
-                if cnt > 0 || indent_first {
                     try!(self.write_indent());
                 }
-                try!(write!(self.writer, "- "));
-                if self.level > 2 {
-                    try!(self.emit_node_compact(x));
-                } else {
-                    try!(self.emit_node(x));
-                }
-                self.level -= 1;
+                try!(write!(self.writer, "-"));
+                try!(self.emit_val(true, x));
             }
+            self.level -= 1;
         }
-        Ok(())
-    }
-
-    fn emit_array_compact(&mut self, v: &[Yaml]) -> EmitResult {
-        try!(write!(self.writer, "["));
-        if self.level >= 0 {
-            try!(write!(self.writer, ""));
-        }
-        for (cnt, x) in v.iter().enumerate() {
-            if cnt > 0 { try!(write!(self.writer, ", ")); }
-            try!(self.emit_node(x));
-        }
-        try!(write!(self.writer, "]"));
         Ok(())
     }
 
@@ -220,42 +214,25 @@ impl<'a> YamlEmitter<'a> {
         } else {
             self.level += 1;
             for (cnt, (k, v)) in h.iter().enumerate() {
+                let complex_key = match *k {
+                  Yaml::Hash(_) | Yaml::Array(_) => true,
+                  _ => false,
+                };
                 if cnt > 0 {
                     try!(write!(self.writer, "\n"));
                     try!(self.write_indent());
                 }
-                match *k {
-                    Yaml::Array(_) | Yaml::Hash(_) => {
-                        try!(self.emit_node_compact(k));
-                    }
-                    _ => {
-                        try!(self.emit_node(k));
-                    }
-                }
-                match *v {
-                    Yaml::Array(ref v) => {
-                        if v.is_empty() {
-                            try!(write!(self.writer, ": "));
-                        } else {
-                            try!(write!(self.writer, ":\n"));
-                        }
-                        try!(self.emit_array(v, true));
-                    }
-                    Yaml::Hash(ref h) => {
-                        if h.is_empty() {
-                            try!(write!(self.writer, ": "));
-                        } else {
-                            try!(write!(self.writer, ":\n"));
-                            self.level += 1;
-                            try!(self.write_indent());
-                            self.level -= 1;
-                        }
-                        try!(self.emit_hash(h));
-                    }
-                    _ => {
-                        try!(write!(self.writer, ": "));
-                        try!(self.emit_node(v));
-                    }
+                if complex_key {
+                  try!(write!(self.writer, "?"));
+                  try!(self.emit_val(true, k));
+                  try!(write!(self.writer, "\n"));
+                  try!(self.write_indent());
+                  try!(write!(self.writer, ":"));
+                  try!(self.emit_val(true, v));
+                } else {
+                  try!(self.emit_node(k));
+                  try!(write!(self.writer, ":"));
+                  try!(self.emit_val(false, v));
                 }
             }
             self.level -= 1;
@@ -263,28 +240,40 @@ impl<'a> YamlEmitter<'a> {
         Ok(())
     }
 
-    fn emit_hash_compact(&mut self, h: &Hash) -> EmitResult {
-        try!(self.writer.write_str("{"));
-        self.level += 1;
-        for (cnt, (k, v)) in h.iter().enumerate() {
-            if cnt > 0 {
-                try!(write!(self.writer, ", "));
+    /// Emit a yaml as a hash or array value: i.e., which should appear
+    /// following a ":" or "-", either after a space, or on a new line.
+    /// If `inline` is true, then the preceeding characters are distinct
+    /// and short enough to respect the compact flag.
+    fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
+        match *val {
+            Yaml::Array(ref v) => {
+                if (inline && self.compact) || v.is_empty() {
+                    try!(write!(self.writer, " "));
+                } else {
+                    try!(write!(self.writer, "\n"));
+                    self.level += 1;
+                    try!(self.write_indent());
+                    self.level -= 1;
+                }
+                self.emit_array(v)
+            },
+            Yaml::Hash(ref h) => {
+                if (inline && self.compact) || h.is_empty() {
+                    try!(write!(self.writer, " "));
+                } else {
+                    try!(write!(self.writer, "\n"));
+                    self.level += 1;
+                    try!(self.write_indent());
+                    self.level -= 1;
+                }
+                self.emit_hash(h)
+            },
+            _ => {
+                try!(write!(self.writer, " "));
+                self.emit_node(val)
             }
-            match *k {
-                // complex key is not supported
-                Yaml::Array(_) | Yaml::Hash(_) => {
-                    return Err(EmitError::BadHashmapKey);
-                },
-                _ => { try!(self.emit_node(k)); }
-            }
-            try!(write!(self.writer, ": "));
-            try!(self.emit_node(v));
         }
-        try!(self.writer.write_str("}"));
-        self.level -= 1;
-        Ok(())
     }
-
 }
 
 /// Check if the string requires quoting.
@@ -466,8 +455,30 @@ string2: "true"
 string3: "false"
 string4: "~"
 null0: ~
-[true, false]: real_bools
-["True", "TRUE", "False", "FALSE", "y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "on", "On", "ON", "off", "Off", "OFF"]: false_bools
+? - true
+  - false
+: real_bools
+? - "True"
+  - "TRUE"
+  - "False"
+  - "FALSE"
+  - "y"
+  - "Y"
+  - "yes"
+  - "Yes"
+  - "YES"
+  - "n"
+  - "N"
+  - "no"
+  - "No"
+  - "NO"
+  - "on"
+  - "On"
+  - "ON"
+  - "off"
+  - "Off"
+  - "OFF"
+: false_bools
 bool0: true
 bool1: false"#;
 
@@ -484,7 +495,16 @@ bool1: false"#;
 
     #[test]
     fn test_empty_and_nested() {
-        let s = r#"---
+      test_empty_and_nested_flag(false)
+    }
+
+    #[test]
+    fn test_empty_and_nested_compact() {
+      test_empty_and_nested_flag(true)
+    }
+
+    fn test_empty_and_nested_flag(compact: bool) {
+        let s = if compact { r#"---
 a:
   b:
     c: hello
@@ -492,13 +512,23 @@ a:
 e:
   - f
   - g
-  - h: []"#;
+  - h: []"# } else { r#"---
+a:
+  b:
+    c: hello
+  d: {}
+e:
+  - f
+  - g
+  -
+    h: []"# };
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.compact(compact);
             emitter.dump(doc).unwrap();
         }
 
@@ -536,7 +566,8 @@ a:
   - - c
     - d
     - - e
-      - [f, e]"#;
+      - - f
+      - - e"#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
