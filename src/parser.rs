@@ -112,7 +112,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
         match self.current {
             Some(ref x) => Ok(x),
             None => {
-                self.current = Some(self.next()?);
+                self.current = Some(try!(self.next()));
                 self.peek()
             }
         }
