@@ -33,6 +33,18 @@ impl Marker {
             col: col
         }
     }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    pub fn col(&self) -> usize {
+        self.col
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Eq)]
