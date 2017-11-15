@@ -61,8 +61,8 @@ impl ScanError {
         }
     }
 
-    pub fn marker(&self) -> Marker {
-        self.mark
+    pub fn marker(&self) -> &Marker {
+        &self.mark
     }
 }
 
