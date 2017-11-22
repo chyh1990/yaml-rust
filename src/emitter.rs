@@ -17,6 +17,10 @@ impl Error for EmitError {
             EmitError::BadHashmapKey => "bad hashmap key",
         }
     }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
 }
 
 impl Display for EmitError {
