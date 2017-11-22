@@ -60,6 +60,10 @@ impl ScanError {
             info: info.to_owned()
         }
     }
+
+    pub fn marker(&self) -> &Marker {
+        &self.mark
+    }
 }
 
 impl Error for ScanError {
