@@ -307,7 +307,10 @@ fn need_quotes(string: &str) -> bool {
         }
     })
     || [// http://yaml.org/type/bool.html
-        "y","Y","yes","Yes","YES","n","N","no","No","NO",
+        // Note: 'y', 'Y', 'n', 'N', is not quoted deliberately, as in libyaml. PyYAML also parse
+        // them as string, not booleans, although it is volating the YAML 1.1 specification.
+        // See https://github.com/dtolnay/serde-yaml/pull/83#discussion_r152628088.
+        "yes","Yes","YES","no","No","NO",
         "True", "TRUE", "true", "False", "FALSE", "false",
         "on","On","ON","off","Off","OFF",
         // http://yaml.org/type/null.html
@@ -409,6 +412,7 @@ field: ":"
 field2: "{"
 field3: "\\"
 field4: "\n"
+field5: "can't avoid quote"
 float: "2.6"
 int: "4"
 nullable: "null"
@@ -425,7 +429,7 @@ products:
   "true": bool key
   "{}": empty hash key
 x: test
-"y": "can't avoid quoting here"
+y: avoid quoting here
 z: string with spaces"#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
@@ -466,13 +470,13 @@ null0: ~
   - "TRUE"
   - "False"
   - "FALSE"
-  - "y"
-  - "Y"
+  - y
+  - Y
   - "yes"
   - "Yes"
   - "YES"
-  - "n"
-  - "N"
+  - n
+  - N
   - "no"
   - "No"
   - "NO"
@@ -494,7 +498,7 @@ bool1: false"#;
             emitter.dump(doc).unwrap();
         }
 
-        assert_eq!(expected, writer, "actual:\n\n{}\n", writer);
+        assert_eq!(expected, writer, "expected:\n{}\nactual:\n{}\n", expected, writer);
     }
 
     #[test]
