@@ -176,7 +176,7 @@ impl YamlLoader {
             match *parent {
                 (Yaml::Array(ref mut v), _) => v.push(node.0),
                 (Yaml::Hash(ref mut h), _) => {
-                    let mut cur_key = self.key_stack.last_mut().unwrap();
+                    let cur_key = self.key_stack.last_mut().unwrap();
                     // current node is a key
                     if cur_key.is_badvalue() {
                         *cur_key = node.0;
