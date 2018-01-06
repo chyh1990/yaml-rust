@@ -28,7 +28,7 @@ Add the following to the Cargo.toml of your project:
 
 ```toml
 [dependencies]
-yaml-rust = "0.3"
+yaml-rust = "0.4"
 ```
 
 or
