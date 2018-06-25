@@ -9,24 +9,24 @@ use parser::*;
 use scanner::{TScalarStyle, ScanError, TokenType, Marker};
 use linked_hash_map::LinkedHashMap;
 
-/// A YAML node is stored as this `Yaml` enumeration, which provides an easy way to
+/// A YAML node is stored as this `Node` enumeration, which provides an easy way to
 /// access your YAML document.
 ///
 /// # Examples
 ///
 /// ```
-/// use yaml_rust::Yaml;
-/// let foo = Yaml::from_str("-123"); // convert the string to the appropriate YAML type
+/// use yaml_rust::Node;
+/// let foo = Node::from_str("-123"); // convert the string to the appropriate YAML type
 /// assert_eq!(foo.as_i64().unwrap(), -123);
 ///
 /// // iterate over an Array
-/// let vec = Yaml::Array(vec![Yaml::Integer(1), Yaml::Integer(2)]);
+/// let vec = Node::Array(vec![Node::Integer(1), Node::Integer(2)]);
 /// for v in vec.as_vec().unwrap() {
 ///     assert!(v.as_i64().is_some());
 /// }
 /// ```
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
-pub enum Yaml {
+pub enum Node {
     /// Float types are stored as String and parsed on demand.
     /// Note that f64 does NOT implement Eq trait and can NOT be stored in BTreeMap.
     Real(string::String),
@@ -51,6 +51,10 @@ pub enum Yaml {
     /// returns `BadValue`.
     BadValue,
 }
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
+pub struct Yaml(Option<Marker>, Node);
+
 
 pub type Array = Vec<Yaml>;
 pub type Hash = LinkedHashMap<Yaml, Yaml>;
@@ -108,7 +112,7 @@ impl MarkedEventReceiver for YamlLoader {
             },
             Event::Scalar(v, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
-                    Yaml::String(v)
+                    Node::String(v)
                 } else if let Some(TokenType::Tag(ref handle, ref suffix)) = tag {
                     // XXX tag:yaml.org,2002:
                     if handle == "!!" {
@@ -116,36 +120,36 @@ impl MarkedEventReceiver for YamlLoader {
                             "bool" => {
                                 // "true" or "false"
                                 match v.parse::<bool>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(v) => Yaml::Boolean(v)
+                                    Err(_) => Node::BadValue,
+                                    Ok(v) => Node::Boolean(v)
                                 }
                             },
                             "int" => {
                                 match v.parse::<i64>() {
-                                    Err(_) => Yaml::BadValue,
-                                    Ok(v) => Yaml::Integer(v)
+                                    Err(_) => Node::BadValue,
+                                    Ok(v) => Node::Integer(v)
                                 }
                             },
                             "float" => {
                                 match parse_f64(&v) {
-                                    Some(_) => Yaml::Real(v),
-                                    None => Yaml::BadValue,
+                                    Some(_) => Node::Real(v),
+                                    None => Node::BadValue,
                                 }
                             },
                             "null" => {
                                 match v.as_ref() {
-                                    "~" | "null" => Yaml::Null,
-                                    _ => Yaml::BadValue,
+                                    "~" | "null" => Node::Null,
+                                    _ => Node::BadValue,
                                 }
                             }
-                            _  => Yaml::String(v),
+                            _  => Node::String(v),
                         }
                     } else {
-                        Yaml::String(v)
+                        Node::String(v)
                     }
                 } else {
                     // Datatype is not specified, or unrecognized
-                    Yaml::from_str(&v)
+                    Node::from_str(&v)
                 };
 
                 self.insert_new_node((node, aid));
@@ -153,7 +157,7 @@ impl MarkedEventReceiver for YamlLoader {
             Event::Alias(id) => {
                 let n = match self.anchor_map.get(&id) {
                     Some(v) => v.clone(),
-                    None => Yaml::BadValue,
+                    None => Node::BadValue,
                 };
                 self.insert_new_node((n, 0));
             }
@@ -238,7 +242,7 @@ pub fn $name(self) -> Option<$t> {
     );
 );
 
-impl Yaml {
+impl Node {
     define_as!(as_bool, bool, Boolean);
     define_as!(as_i64, i64, Integer);
 
@@ -320,7 +324,7 @@ impl Yaml {
     }
 }
 
-static BAD_VALUE: Yaml = Yaml::BadValue;
+static BAD_VALUE: Node = Node::BadValue;
 impl<'a> Index<&'a str> for Yaml {
     type Output = Yaml;
 
