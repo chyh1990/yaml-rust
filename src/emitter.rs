@@ -156,8 +156,9 @@ impl<'a> YamlEmitter<'a> {
         Ok(())
     }
 
-    fn emit_node(&mut self, node: &Yaml) -> EmitResult {
-        match *node {
+    fn emit_node(&mut self, node: &Node) -> EmitResult {
+
+        match node  {
             Node::Array(ref v) => self.emit_array(v),
             Node::Hash(ref h) => self.emit_hash(h),
             Node::String(ref v) => {
@@ -170,7 +171,7 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             },
             Node::Boolean(v) => {
-                if v {
+                if *v {
                     try!(self.writer.write_str("true"));
                 } else {
                     try!(self.writer.write_str("false"));
@@ -232,11 +233,11 @@ impl<'a> YamlEmitter<'a> {
                   try!(write!(self.writer, "\n"));
                   try!(self.write_indent());
                   try!(write!(self.writer, ":"));
-                  try!(self.emit_val(true, v));
+                  try!(self.emit_val(true, &v.value));
                 } else {
                   try!(self.emit_node(k));
                   try!(write!(self.writer, ":"));
-                  try!(self.emit_val(false, v));
+                  try!(self.emit_val(false, &v.value));
                 }
             }
             self.level -= 1;
@@ -248,7 +249,7 @@ impl<'a> YamlEmitter<'a> {
     /// following a ":" or "-", either after a space, or on a new line.
     /// If `inline` is true, then the preceeding characters are distinct
     /// and short enough to respect the compact flag.
-    fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
+    fn emit_val(&mut self, inline: bool, val: &Node) -> EmitResult {
         match *val {
             Node::Array(ref v) => {
                 if (inline && self.compact) || v.is_empty() {
