@@ -76,32 +76,32 @@ include!("spec_test.rs.inc");
 
 #[test]
 fn test_mapvec_legal() {
-  use yaml_rust::yaml::{Array, Hash, Yaml};
+  use yaml_rust::yaml::{Array, Hash, Yaml, Node, HashItem};
   use yaml_rust::{YamlLoader, YamlEmitter};
 
   // Emitting a `map<map<seq<_>>, _>` should result in legal yaml that
   // we can parse.
 
   let mut key = Array::new();
-  key.push(Yaml::Integer(1));
-  key.push(Yaml::Integer(2));
-  key.push(Yaml::Integer(3));
+  key.push(Yaml(None, Node::Integer(1)));
+  key.push(Yaml(None, Node::Integer(2)));
+  key.push(Yaml(None, Node::Integer(3)));
 
   let mut keyhash = Hash::new();
-  keyhash.insert(Yaml::String("key".into()), Yaml::Array(key));
+  keyhash.insert(Node::String("key".into()), HashItem { key_marker: None, value: Yaml(None, Node::Array(key))});
 
   let mut val = Array::new();
-  val.push(Yaml::Integer(4));
-  val.push(Yaml::Integer(5));
-  val.push(Yaml::Integer(6));
+  val.push(Yaml(None, Node::Integer(4)));
+  val.push(Yaml(None, Node::Integer(5)));
+  val.push(Yaml(None, Node::Integer(6)));
 
   let mut hash = Hash::new();
-  hash.insert(Yaml::Hash(keyhash), Yaml::Array(val));
+  hash.insert(Node::Hash(keyhash), HashItem { key_marker: None, value: Yaml(None, Node::Array(val))});
 
   let mut out_str = String::new();
   {
     let mut emitter = YamlEmitter::new(&mut out_str);
-    emitter.dump(&Yaml::Hash(hash)).unwrap();
+    emitter.dump(&Yaml(None, Node::Hash(hash))).unwrap();
   }
 
   // At this point, we are tempted to naively render like this:
@@ -138,4 +138,3 @@ fn test_mapvec_legal() {
 
   YamlLoader::load_from_str(&out_str).unwrap();
 }
-

@@ -10,18 +10,21 @@ use scanner::{TScalarStyle, ScanError, TokenType, Marker};
 use linked_hash_map::LinkedHashMap;
 use std::ops::Deref;
 
+use std::cmp::Ordering;
+use std::hash::Hasher;
+
 /// A YAML node is stored as this `Node` enumeration, which provides an easy way to
 /// access your YAML document.
 ///
 /// # Examples
 ///
 /// ```
-/// use yaml_rust::Node;
+/// use yaml_rust::{Yaml, Node};
 /// let foo = Node::from_str("-123"); // convert the string to the appropriate YAML type
 /// assert_eq!(foo.as_i64().unwrap(), -123);
 ///
 /// // iterate over an Array
-/// let vec = Node::Array(vec![Node::Integer(1), Node::Integer(2)]);
+/// let vec = Node::Array(vec![Yaml(None, Node::Integer(1)), Yaml(None, Node::Integer(2))]);
 /// for v in vec.as_vec().unwrap() {
 ///     assert!(v.as_i64().is_some());
 /// }
@@ -53,7 +56,7 @@ pub enum Node {
     BadValue,
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
+#[derive(Clone, Debug)]
 pub struct Yaml(pub Option<Marker>, pub Node);
 
 impl Deref for Yaml {
@@ -64,11 +67,65 @@ impl Deref for Yaml {
     }
 }
 
+impl PartialEq for Yaml {
+    fn eq(&self, other: &Yaml) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl PartialOrd for Yaml {
+    fn partial_cmp(&self, other: &Yaml) -> Option<Ordering> {
+        Some(self.1.cmp(&other.1))
+    }
+}
+
+impl Eq for Yaml {}
+
+impl Ord for Yaml {
+    fn cmp(&self, other: &Yaml) -> Ordering {
+        self.1.cmp(&other.1)
+    }
+}
+
+impl ::std::hash::Hash for Yaml {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.1.hash(state);
+    }
+}
+
+
 pub type Array = Vec<Yaml>;
 
-#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
+#[derive(Clone, Debug)]
 pub struct HashItem { pub key_marker: Option<Marker>, pub value: Yaml }
 pub type Hash = LinkedHashMap<Node, HashItem>; // don't store mark in key; we want to be able to look up by value.
+
+impl PartialEq for HashItem {
+    fn eq(&self, other: &HashItem) -> bool {
+        self.value == other.value
+    }
+}
+
+impl PartialOrd for HashItem {
+    fn partial_cmp(&self, other: &HashItem) -> Option<Ordering> {
+        Some(self.value.cmp(&other.value))
+    }
+}
+
+impl Eq for HashItem {}
+
+impl Ord for HashItem {
+    fn cmp(&self, other: &HashItem) -> Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl ::std::hash::Hash for HashItem {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
 
 // parse f64 as Core schema
 // See: https://github.com/chyh1990/yaml-rust/issues/51
@@ -412,7 +469,7 @@ c: [1, 2]
         let s: String = "".to_owned();
         YamlLoader::load_from_str(&s).unwrap();
         let s: String = "---".to_owned();
-        assert_eq!(YamlLoader::load_from_str(&s).unwrap()[0], Yaml::Null);
+        assert_eq!(YamlLoader::load_from_str(&s).unwrap()[0].1, Node::Null);
     }
 
     #[test]
@@ -476,7 +533,7 @@ a1: &DEFAULT
 ";
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
-        assert_eq!(doc["a1"]["b2"], Yaml::BadValue);
+        assert_eq!(doc["a1"]["b2"].1, Node::BadValue);
 
     }
 
@@ -571,9 +628,9 @@ a1: &DEFAULT
     #[test]
     fn test_bad_docstart() {
         assert!(YamlLoader::load_from_str("---This used to cause an infinite loop").is_ok());
-        assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml::String(String::from("----"))]));
-        assert_eq!(YamlLoader::load_from_str("--- #here goes a comment"), Ok(vec![Yaml::Null]));
-        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml::String(String::from("----"))]));
+        assert_eq!(YamlLoader::load_from_str("----"), Ok(vec![Yaml(None, Node::String(String::from("----")))]));
+        assert_eq!(YamlLoader::load_from_str("--- #here goes a comment"), Ok(vec![Yaml(None, Node::Null)]));
+        assert_eq!(YamlLoader::load_from_str("---- #here goes a comment"), Ok(vec![Yaml(None, Node::String(String::from("----")))]));
     }
 
     #[test]
@@ -601,29 +658,31 @@ a1: &DEFAULT
 - .NAN
 - !!float .INF
 ";
-        let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
-        let mut doc = out.next().unwrap().into_iter();
 
-        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
-        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
-        assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 123);
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), -321);
-        assert_eq!(doc.next().unwrap().into_f64().unwrap(), 1.23);
-        assert_eq!(doc.next().unwrap().into_f64().unwrap(), -1e4);
-        assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
-        assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
-        assert_eq!(doc.next().unwrap().into_string().unwrap(), "0");
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 100);
-        assert_eq!(doc.next().unwrap().into_f64().unwrap(), 2.0);
-        assert_eq!(doc.next().unwrap().into_bool().unwrap(), true);
-        assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
-        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
-        assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::NEG_INFINITY);
-        assert!(doc.next().unwrap().into_f64().is_some());
-        assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::INFINITY);
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        let mut doc = first.1.into_iter();
+
+        assert_eq!(doc.next().unwrap().1.into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().1.into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().1.into_string().unwrap(), "string");
+        assert_eq!(doc.next().unwrap().1.into_i64().unwrap(), 123);
+        assert_eq!(doc.next().unwrap().1.into_i64().unwrap(), -321);
+        assert_eq!(doc.next().unwrap().1.into_f64().unwrap(), 1.23);
+        assert_eq!(doc.next().unwrap().1.into_f64().unwrap(), -1e4);
+        assert_eq!(doc.next().unwrap().1.into_bool().unwrap(), true);
+        assert_eq!(doc.next().unwrap().1.into_bool().unwrap(), false);
+        assert_eq!(doc.next().unwrap().1.into_string().unwrap(), "0");
+        assert_eq!(doc.next().unwrap().1.into_i64().unwrap(), 100);
+        assert_eq!(doc.next().unwrap().1.into_f64().unwrap(), 2.0);
+        assert_eq!(doc.next().unwrap().1.into_bool().unwrap(), true);
+        assert_eq!(doc.next().unwrap().1.into_bool().unwrap(), false);
+        assert_eq!(doc.next().unwrap().1.into_i64().unwrap(), 255);
+        assert_eq!(doc.next().unwrap().1.into_i64().unwrap(), 63);
+        assert_eq!(doc.next().unwrap().1.into_i64().unwrap(), 12345);
+        assert_eq!(doc.next().unwrap().1.into_f64().unwrap(), f64::NEG_INFINITY);
+        assert!(doc.next().unwrap().1.into_f64().is_some());
+        assert_eq!(doc.next().unwrap().1.into_f64().unwrap(), f64::INFINITY);
     }
 
     #[test]
@@ -635,10 +694,10 @@ c: ~
 ";
         let out = YamlLoader::load_from_str(&s).unwrap();
         let first = out.into_iter().next().unwrap();
-        let mut iter = first.into_hash().unwrap().into_iter();
-        assert_eq!(Some((Yaml::String("b".to_owned()), Yaml::Null)), iter.next());
-        assert_eq!(Some((Yaml::String("a".to_owned()), Yaml::Null)), iter.next());
-        assert_eq!(Some((Yaml::String("c".to_owned()), Yaml::Null)), iter.next());
+        let mut iter = first.1.into_hash().unwrap().into_iter();
+        assert_eq!(Some((Node::String("b".to_owned()), HashItem { key_marker: Some(Marker { index: 0, col:3, line:0 }), value: Yaml(None, Node::Null)})), iter.next());
+        assert_eq!(Some((Node::String("a".to_owned()), HashItem { key_marker: Some(Marker { index: 0, col:0, line:2 }), value: Yaml(None, Node::Null)})), iter.next());
+        assert_eq!(Some((Node::String("c".to_owned()), HashItem { key_marker: Some(Marker { index: 0, col:15, line:0 }), value: Yaml(None, Node::Null)})), iter.next());
         assert_eq!(None, iter.next());
     }
 

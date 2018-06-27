@@ -20,9 +20,9 @@ pub enum TScalarStyle {
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Ord, Debug, Eq, Hash)]
 pub struct Marker {
-    index: usize,
-    line: usize,
-    col: usize,
+    pub index: usize,
+    pub line: usize,
+    pub col: usize,
 }
 
 impl Marker {
