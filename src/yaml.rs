@@ -256,8 +256,9 @@ impl YamlLoader {
                     // current node is a value
                     } else {
                         let mut newkey = Yaml(None, Node::BadValue);
+                        let cur_key_mark = cur_key.0;
                         mem::swap(&mut newkey, cur_key);
-                        h.insert(newkey.1, HashItem { key_marker: None, value:  node.0});
+                        h.insert(newkey.1, HashItem { key_marker: cur_key_mark, value:  node.0});
                     }
                 },
                 _ => unreachable!(),
@@ -695,9 +696,9 @@ c: ~
         let out = YamlLoader::load_from_str(&s).unwrap();
         let first = out.into_iter().next().unwrap();
         let mut iter = first.1.into_hash().unwrap().into_iter();
-        assert_eq!(Some((Node::String("b".to_owned()), HashItem { key_marker: Some(Marker { index: 0, col:3, line:0 }), value: Yaml(None, Node::Null)})), iter.next());
-        assert_eq!(Some((Node::String("a".to_owned()), HashItem { key_marker: Some(Marker { index: 0, col:0, line:2 }), value: Yaml(None, Node::Null)})), iter.next());
-        assert_eq!(Some((Node::String("c".to_owned()), HashItem { key_marker: Some(Marker { index: 0, col:15, line:0 }), value: Yaml(None, Node::Null)})), iter.next());
+        assert_eq!(Some((Node::String("b".to_owned()), HashItem { key_marker: None, value: Yaml(None, Node::Null)})), iter.next());
+        assert_eq!(Some((Node::String("a".to_owned()), HashItem { key_marker: None, value: Yaml(None, Node::Null)})), iter.next());
+        assert_eq!(Some((Node::String("c".to_owned()), HashItem { key_marker: None, value: Yaml(None, Node::Null)})), iter.next());
         assert_eq!(None, iter.next());
     }
 
@@ -712,5 +713,69 @@ c: ~
         let out = YamlLoader::load_from_str(&s).unwrap();
         let first = out.into_iter().next().unwrap();
         assert_eq!(first[0]["important"].as_bool().unwrap(), true);
+    }
+
+    macro_rules! assert_mark (
+        ($input:expr, $line: expr, $col: expr) => {
+            if let Some(Marker { line, col, ..} ) = $input {
+                if line != $line {
+                    panic!("Wrong line; expected {}, got {}", $line, line)
+                }
+                if col != $col {
+                    panic!("Wrong column; expected {}, got {}", $col, col)
+                }
+            } else {
+                panic!("No Marker available!")
+            }
+        }
+    );
+
+    #[test]
+    fn test_marks_scalars() {
+        let s = "thing";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        assert_mark!(first.0, 1, 0);
+
+        let s = " thing";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        assert_mark!(first.0, 1, 1);
+
+        let s = " 1";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let first = out.into_iter().next().unwrap();
+        assert_mark!(first.0, 1, 1);
+    }
+
+    #[test]
+    fn test_marks_list() {
+        let s = "- a\n-  b";
+        let out = YamlLoader::load_from_str(&s).unwrap().into_iter();
+
+        let array_yaml = out.into_iter().next().unwrap();
+        assert_mark!(array_yaml.0, 1, 0);
+
+        let array_items : Vec<Yaml> = array_yaml.1.into_iter().collect();
+
+        assert_mark!(array_items[0].0, 1,2);
+        assert_mark!(array_items[1].0, 2,3);
+    }
+
+    #[test]
+    fn test_marks_dict() {
+        let s = "a: 1\nb:  2";
+        let out = YamlLoader::load_from_str(&s).unwrap().into_iter();
+
+        let hash_yaml = out.into_iter().next().unwrap();
+        assert_mark!(hash_yaml.0, 1, 1);
+
+        let hash_items: Hash = hash_yaml.1.into_hash().unwrap();
+
+        assert_mark!(hash_items[&Node::String("a".into())].key_marker, 1, 0);
+        assert_mark!(hash_items[&Node::String("a".into())].value.0 , 1, 3);
+
+        assert_mark!(hash_items[&Node::String("b".into())].key_marker, 2, 0);
+        assert_mark!(hash_items[&Node::String("b".into())].value.0, 2, 4);
     }
 }
