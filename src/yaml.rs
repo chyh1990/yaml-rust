@@ -157,7 +157,7 @@ impl MarkedEventReceiver for YamlLoader {
             Event::DocumentEnd => {
                 match self.doc_stack.len() {
                     // empty document
-                    0 => self.docs.push(Yaml(None, Node::BadValue)),
+                    0 => self.docs.push(Yaml(Some(mark), Node::BadValue)),
                     1 => self.docs.push(self.doc_stack.pop().unwrap().0),
                     _ => unreachable!()
                 }
