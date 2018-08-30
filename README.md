@@ -17,11 +17,6 @@ Rust 1.0.0 and nightly!
 
 See [Document](http://chyh1990.github.io/yaml-rust/doc/yaml_rust/)
 
-> NOTE: This library is still under heavy development.
-
-> WARNING: This library needs more tests and it is NOT ready for
-> parsing arbitrary user input from *untrusted source*.
-
 ## Quick Start
 
 Add the following to the Cargo.toml of your project:
