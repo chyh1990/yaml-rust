@@ -281,8 +281,10 @@ impl<'a> YamlEmitter<'a> {
 }
 
 /// Check if the string requires quoting.
+/// Strings starting with any of the following characters must be quoted.
+/// :, &, *, ?, |, -, <, >, =, !, %, @
 /// Strings containing any of the following characters must be quoted.
-/// :, {, }, [, ], ,, &, *, #, ?, |, -, <, >, =, !, %, @, `
+/// {, }, [, ], ,, #, `
 ///
 /// If the string contains any of the following control characters, it must be escaped with double quotes:
 /// \0, \x01, \x02, \x03, \x04, \x05, \x06, \a, \b, \t, \n, \v, \f, \r, \x0e, \x0f, \x10, \x11, \x12, \x13, \x14, \x15, \x16, \x17, \x18, \x19, \x1a, \e, \x1c, \x1d, \x1e, \x1f, \N, \_, \L, \P
@@ -300,9 +302,15 @@ fn need_quotes(string: &str) -> bool {
 
     string == ""
     || need_quotes_spaces(string)
+    || string.starts_with(|character: char| {
+        match character {
+            ':' | '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' => true,
+            _ => false,
+        }
+    })
     || string.contains(|character: char| {
         match character {
-            ':' | '{' | '}' | '[' | ']' | ',' | '&' | '*' | '#' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' | '`' | '\"' | '\'' | '\\' | '\0' ... '\x06' | '\t' | '\n' | '\r' | '\x0e' ... '\x1a' | '\x1c' ... '\x1f' => true,
+            '{' | '}' | '[' | ']' | ',' | '#' | '`' | '\"' | '\'' | '\\' | '\0' ... '\x06' | '\t' | '\n' | '\r' | '\x0e' ... '\x1a' | '\x1c' ... '\x1f' => true,
             _ => false,
         }
     })
@@ -402,7 +410,7 @@ products:
 a7: 你好
 boolean: "true"
 boolean2: "false"
-date: "2014-12-31"
+date: 2014-12-31
 empty_string: ""
 empty_string1: " "
 empty_string2: "    a"
