@@ -49,7 +49,7 @@ pub mod emitter;
 // reexport key APIs
 pub use scanner::ScanError;
 pub use parser::Event;
-pub use yaml::{Yaml, YamlLoader};
+pub use yaml::{Node, Yaml, YamlLoader};
 pub use emitter::{YamlEmitter, EmitError};
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 use std::convert::From;
 use std::error::Error;
-use yaml::{Hash, Yaml};
+use yaml::{Hash, Yaml, Node};
 
 
 #[derive(Copy, Clone, Debug)]
@@ -156,11 +156,12 @@ impl<'a> YamlEmitter<'a> {
         Ok(())
     }
 
-    fn emit_node(&mut self, node: &Yaml) -> EmitResult {
-        match *node {
-            Yaml::Array(ref v) => self.emit_array(v),
-            Yaml::Hash(ref h) => self.emit_hash(h),
-            Yaml::String(ref v) => {
+    fn emit_node(&mut self, node: &Node) -> EmitResult {
+
+        match node  {
+            Node::Array(ref v) => self.emit_array(v),
+            Node::Hash(ref h) => self.emit_hash(h),
+            Node::String(ref v) => {
                 if need_quotes(v) {
                     try!(escape_str(self.writer, v));
                 }
@@ -169,23 +170,23 @@ impl<'a> YamlEmitter<'a> {
                 }
                 Ok(())
             },
-            Yaml::Boolean(v) => {
-                if v {
+            Node::Boolean(v) => {
+                if *v {
                     try!(self.writer.write_str("true"));
                 } else {
                     try!(self.writer.write_str("false"));
                 }
                 Ok(())
             },
-            Yaml::Integer(v) => {
+            Node::Integer(v) => {
                 try!(write!(self.writer, "{}", v));
                 Ok(())
             },
-            Yaml::Real(ref v) => {
+            Node::Real(ref v) => {
                 try!(write!(self.writer, "{}", v));
                 Ok(())
             },
-            Yaml::Null | Yaml::BadValue => {
+            Node::Null | Node::BadValue => {
                 try!(write!(self.writer, "~"));
                 Ok(())
             },
@@ -219,7 +220,7 @@ impl<'a> YamlEmitter<'a> {
             self.level += 1;
             for (cnt, (k, v)) in h.iter().enumerate() {
                 let complex_key = match *k {
-                  Yaml::Hash(_) | Yaml::Array(_) => true,
+                  Node::Hash(_) | Node::Array(_) => true,
                   _ => false,
                 };
                 if cnt > 0 {
@@ -232,11 +233,11 @@ impl<'a> YamlEmitter<'a> {
                   try!(write!(self.writer, "\n"));
                   try!(self.write_indent());
                   try!(write!(self.writer, ":"));
-                  try!(self.emit_val(true, v));
+                  try!(self.emit_val(true, &v.value));
                 } else {
                   try!(self.emit_node(k));
                   try!(write!(self.writer, ":"));
-                  try!(self.emit_val(false, v));
+                  try!(self.emit_val(false, &v.value));
                 }
             }
             self.level -= 1;
@@ -248,9 +249,9 @@ impl<'a> YamlEmitter<'a> {
     /// following a ":" or "-", either after a space, or on a new line.
     /// If `inline` is true, then the preceeding characters are distinct
     /// and short enough to respect the compact flag.
-    fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
+    fn emit_val(&mut self, inline: bool, val: &Node) -> EmitResult {
         match *val {
-            Yaml::Array(ref v) => {
+            Node::Array(ref v) => {
                 if (inline && self.compact) || v.is_empty() {
                     try!(write!(self.writer, " "));
                 } else {
@@ -261,7 +262,7 @@ impl<'a> YamlEmitter<'a> {
                 }
                 self.emit_array(v)
             },
-            Yaml::Hash(ref h) => {
+            Node::Hash(ref h) => {
                 if (inline && self.compact) || h.is_empty() {
                     try!(write!(self.writer, " "));
                 } else {

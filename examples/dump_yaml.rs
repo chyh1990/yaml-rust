@@ -11,18 +11,19 @@ fn print_indent(indent: usize) {
     }
 }
 
-fn dump_node(doc: &yaml::Yaml, indent: usize) {
-    match *doc {
-        yaml::Yaml::Array(ref v) => {
+fn dump_node(yaml: &yaml::Yaml, indent: usize) {
+    let doc = &yaml.1;
+    match doc {
+        yaml::Node::Array(ref v) => {
             for x in v {
                 dump_node(x, indent + 1);
             }
         },
-        yaml::Yaml::Hash(ref h) => {
-            for (k, v) in h {
+        yaml::Node::Hash(ref h) => {
+            for (k, yaml::HashItem { value, .. }) in h {
                 print_indent(indent);
                 println!("{:?}:", k);
-                dump_node(v, indent + 1);
+                dump_node(value, indent + 1);
             }
         },
         _ => {
