@@ -12,9 +12,6 @@ which enjoys the memory safety
 property and other benefits from the Rust language.
 The parser is heavily influenced by `libyaml` and `yaml-cpp`.
 
-This crate works on all Rust-supported platforms. It also works on
-Rust 1.0.0 and nightly!
-
 ## Quick Start
 
 Add the following to the Cargo.toml of your project:
