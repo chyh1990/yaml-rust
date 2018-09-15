@@ -989,7 +989,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.flow_level = self
             .flow_level
             .checked_add(1)
-            .ok_or_else(|| ScanError::new(self.mark, "Recursion limit exceeded"))?;
+            .ok_or_else(|| ScanError::new(self.mark, "recursion limit exceeded"))?;
         Ok(())
     }
     fn decrease_flow_level(&mut self) {
