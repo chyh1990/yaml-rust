@@ -301,11 +301,12 @@ fn need_quotes(string: &str) -> bool {
     string == ""
         || need_quotes_spaces(string)
         || string.starts_with(|character: char| match character {
-            ':' | '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' => true,
+            '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' => true,
             _ => false,
         })
         || string.contains(|character: char| match character {
-            '{'
+            ':'
+            | '{'
             | '}'
             | '['
             | ']'
