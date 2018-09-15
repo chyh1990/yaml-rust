@@ -5,6 +5,8 @@ matrix:
     - rust: 1.22.1
     - rust: beta
     - rust: nightly
+    - rust: 1.13.0
+      script: cargo build
   allow_failures:
     - rust: nightly
 
