@@ -2,12 +2,12 @@ language: rust
 
 matrix:
   include:
-    - rust: 1.22.1
     - rust: stable
     - rust: beta
     - rust: nightly
     - rust: 1.13.0
       script: cargo build
+    - rust: 1.22.1
     - rust: nightly
       script: rustup component add clippy-preview && cargo clippy -- -Dclippy
   allow_failures:
@@ -15,5 +15,5 @@ matrix:
       script: rustup component add clippy-preview && cargo clippy -- -Dclippy
 
 script:
-  - cargo build --verbose
-  - cargo test --verbose
+  - cargo build
+  - cargo test
