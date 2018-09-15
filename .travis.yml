@@ -9,6 +9,7 @@ matrix:
       script: cargo build
     - rust: 1.22.1
     - rust: nightly
+      env: CLIPPY
       script: |
           if rustup component add clippy-preview; then
               cargo clippy -- -Dclippy
