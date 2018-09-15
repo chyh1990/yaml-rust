@@ -36,6 +36,7 @@
 //!
 //! ```
 
+#![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
 #![cfg_attr(feature = "cargo-clippy", warn(cyclomatic_complexity))]
 #![cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 
