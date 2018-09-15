@@ -8,14 +8,12 @@ matrix:
     - rust: nightly
     - rust: 1.13.0
       script: cargo build
+    - rust: nightly
+      script: rustup component add clippy-preview && cargo clippy -- -Dclippy
   allow_failures:
     - rust: nightly
+      script: rustup component add clippy-preview && cargo clippy -- -Dclippy
 
 script:
   - cargo build --verbose
-  - |
-      if [ "$TRAVIS_RUST_VERSION" = nightly ]; then
-          cargo install clippy --debug
-          cargo clippy -- -Dclippy
-      fi
   - cargo test --verbose
