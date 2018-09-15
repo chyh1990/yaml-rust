@@ -21,13 +21,6 @@ Add the following to the Cargo.toml of your project:
 yaml-rust = "0.4"
 ```
 
-or
-
-```toml
-[dependencies.yaml-rust]
-git = "https://github.com/chyh1990/yaml-rust.git"
-```
-
 and import:
 
 ```rust
