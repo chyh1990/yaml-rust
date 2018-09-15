@@ -9,10 +9,10 @@ matrix:
       script: cargo build
     - rust: 1.22.1
     - rust: nightly
-      script: rustup component add clippy-preview && cargo clippy -- -Dclippy
-  allow_failures:
-    - rust: nightly
-      script: rustup component add clippy-preview && cargo clippy -- -Dclippy
+      script: |
+          if rustup component add clippy-preview; then
+              cargo clippy -- -Dclippy
+          fi
 
 script:
   - cargo build
