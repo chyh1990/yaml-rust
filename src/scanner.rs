@@ -149,7 +149,7 @@ pub struct Scanner<T> {
     simple_keys: Vec<SimpleKey>,
     indent: isize,
     indents: Vec<isize>,
-    flow_level: usize,
+    flow_level: u8,
     tokens_parsed: usize,
     token_available: bool,
 }
@@ -906,7 +906,7 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         // The indicators '[' and '{' may start a simple key.
         try!(self.save_simple_key());
 
-        self.increase_flow_level();
+        self.increase_flow_level()?;
 
         self.allow_simple_key();
 
@@ -941,9 +941,11 @@ impl<T: Iterator<Item=char>> Scanner<T> {
         Ok(())
     }
 
-    fn increase_flow_level(&mut self) {
+    fn increase_flow_level(&mut self) -> ScanResult {
         self.simple_keys.push(SimpleKey::new(Marker::new(0,0,0)));
-        self.flow_level += 1;
+        self.flow_level = self.flow_level.checked_add(1)
+            .ok_or_else(|| ScanError::new(self.mark, "Recursion limit exceeded"))?;
+        Ok(())
     }
     fn decrease_flow_level(&mut self) {
         if self.flow_level > 0 {

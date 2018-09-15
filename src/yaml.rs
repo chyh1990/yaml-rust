@@ -638,4 +638,16 @@ c: ~
         let first = out.into_iter().next().unwrap();
         assert_eq!(first[0]["important"].as_bool().unwrap(), true);
     }
+
+    #[test]
+    fn test_recursion_depth_check_objects() {
+        let s = "{a:".repeat(10_000) + &"}".repeat(10_000);
+        assert!(YamlLoader::load_from_str(&s).is_err());
+    }
+
+    #[test]
+    fn test_recursion_depth_check_arrays() {
+        let s = "[".repeat(10_000) + &"]".repeat(10_000);
+        assert!(YamlLoader::load_from_str(&s).is_err());
+    }
 }
