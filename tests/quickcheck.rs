@@ -3,8 +3,8 @@ extern crate yaml_rust;
 extern crate quickcheck;
 
 use quickcheck::TestResult;
-use yaml_rust::{Yaml, YamlLoader, YamlEmitter};
 use std::error::Error;
+use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
 
 quickcheck! {
     fn test_check_weird_keys(xs: Vec<String>) -> TestResult {

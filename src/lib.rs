@@ -41,16 +41,16 @@
 
 extern crate linked_hash_map;
 
-pub mod yaml;
-pub mod scanner;
-pub mod parser;
 pub mod emitter;
+pub mod parser;
+pub mod scanner;
+pub mod yaml;
 
 // reexport key APIs
-pub use scanner::ScanError;
+pub use emitter::{EmitError, YamlEmitter};
 pub use parser::Event;
+pub use scanner::ScanError;
 pub use yaml::{Yaml, YamlLoader};
-pub use emitter::{YamlEmitter, EmitError};
 
 #[cfg(test)]
 mod tests {
@@ -58,8 +58,7 @@ mod tests {
 
     #[test]
     fn test_api() {
-        let s =
-"
+        let s = "
 # from yaml-cpp example
 - name: Ogre
   position: [0, 5, 0]
@@ -104,8 +103,7 @@ mod tests {
 
     #[test]
     fn test_fail() {
-        let s =
-"
+        let s = "
 # syntax error
 scalar
 key: [1, 2]]
