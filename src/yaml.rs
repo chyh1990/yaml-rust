@@ -695,4 +695,16 @@ subcommands3:
         assert!(doc["subcommands2"][0]["server"].as_hash().is_some());
         assert!(doc["subcommands3"][0]["server"].as_hash().is_some());
     }
+
+    #[test]
+    fn test_recursion_depth_check_objects() {
+        let s = "{a:".repeat(10_000) + &"}".repeat(10_000);
+        assert!(YamlLoader::load_from_str(&s).is_err());
+    }
+
+    #[test]
+    fn test_recursion_depth_check_arrays() {
+        let s = "[".repeat(10_000) + &"]".repeat(10_000);
+        assert!(YamlLoader::load_from_str(&s).is_err());
+    }
 }
