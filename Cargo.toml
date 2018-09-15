@@ -13,4 +13,4 @@ repository = "https://github.com/chyh1990/yaml-rust"
 linked-hash-map = ">=0.0.9, <0.6"
 
 [dev-dependencies]
-quickcheck = "0.6"
+quickcheck = "0.7"

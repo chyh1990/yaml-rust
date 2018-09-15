@@ -640,6 +640,63 @@ c: ~
     }
 
     #[test]
+    fn test_indentation_equality() {
+
+        let four_spaces = YamlLoader::load_from_str(r#"
+hash:
+    with:
+        indentations
+"#).unwrap().into_iter().next().unwrap();
+
+        let two_spaces = YamlLoader::load_from_str(r#"
+hash:
+  with:
+    indentations
+"#).unwrap().into_iter().next().unwrap();
+
+        let one_space = YamlLoader::load_from_str(r#"
+hash:
+ with:
+  indentations
+"#).unwrap().into_iter().next().unwrap();
+
+        let mixed_spaces = YamlLoader::load_from_str(r#"
+hash:
+     with:
+               indentations
+"#).unwrap().into_iter().next().unwrap();
+
+        assert_eq!(four_spaces, two_spaces);
+        assert_eq!(two_spaces, one_space);
+        assert_eq!(four_spaces, mixed_spaces);
+    }
+
+    #[test]
+    fn test_two_space_indentations() {
+        // https://github.com/kbknapp/clap-rs/issues/965
+
+        let s = r#"
+subcommands:
+  - server:
+    about: server related commands
+subcommands2:
+  - server:
+      about: server related commands
+subcommands3:
+ - server:
+    about: server related commands
+            "#;
+
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out.into_iter().next().unwrap();
+
+        println!("{:#?}", doc);
+        assert_eq!(doc["subcommands"][0]["server"],  Yaml::Null);
+        assert!(doc["subcommands2"][0]["server"].as_hash().is_some());
+        assert!(doc["subcommands3"][0]["server"].as_hash().is_some());
+    }
+
+    #[test]
     fn test_recursion_depth_check_objects() {
         let s = "{a:".repeat(10_000) + &"}".repeat(10_000);
         assert!(YamlLoader::load_from_str(&s).is_err());
