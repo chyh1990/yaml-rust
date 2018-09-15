@@ -113,10 +113,9 @@ fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
 impl<'a> YamlEmitter<'a> {
     pub fn new(writer: &'a mut fmt::Write) -> YamlEmitter {
         YamlEmitter {
-            writer: writer,
+            writer,
             best_indent: 2,
             compact: true,
-
             level: -1,
         }
     }

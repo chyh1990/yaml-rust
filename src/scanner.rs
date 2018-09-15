@@ -27,11 +27,7 @@ pub struct Marker {
 
 impl Marker {
     fn new(index: usize, line: usize, col: usize) -> Marker {
-        Marker {
-            index: index,
-            line: line,
-            col: col,
-        }
+        Marker { index, line, col }
     }
 
     pub fn index(&self) -> usize {
@@ -135,7 +131,7 @@ impl SimpleKey {
             possible: false,
             required: false,
             token_number: 0,
-            mark: mark,
+            mark,
         }
     }
 }
@@ -227,7 +223,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Creates the YAML tokenizer.
     pub fn new(rdr: T) -> Scanner<T> {
         Scanner {
-            rdr: rdr,
+            rdr,
             buffer: VecDeque::new(),
             mark: Marker::new(0, 1, 0),
             tokens: VecDeque::new(),
