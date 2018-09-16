@@ -139,7 +139,7 @@ impl<'a> YamlEmitter<'a> {
 
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
         // write DocumentStart
-        write!(self.writer, "---\n")?;
+        writeln!(self.writer, "---")?;
         self.level = -1;
         self.emit_node(doc)
     }
@@ -200,7 +200,7 @@ impl<'a> YamlEmitter<'a> {
             self.level += 1;
             for (cnt, x) in v.iter().enumerate() {
                 if cnt > 0 {
-                    write!(self.writer, "\n")?;
+                    writeln!(self.writer)?;
                     self.write_indent()?;
                 }
                 write!(self.writer, "-")?;
@@ -222,13 +222,13 @@ impl<'a> YamlEmitter<'a> {
                     _ => false,
                 };
                 if cnt > 0 {
-                    write!(self.writer, "\n")?;
+                    writeln!(self.writer)?;
                     self.write_indent()?;
                 }
                 if complex_key {
                     write!(self.writer, "?")?;
                     self.emit_val(true, k)?;
-                    write!(self.writer, "\n")?;
+                    writeln!(self.writer)?;
                     self.write_indent()?;
                     write!(self.writer, ":")?;
                     self.emit_val(true, v)?;
@@ -253,7 +253,7 @@ impl<'a> YamlEmitter<'a> {
                 if (inline && self.compact) || v.is_empty() {
                     write!(self.writer, " ")?;
                 } else {
-                    write!(self.writer, "\n")?;
+                    writeln!(self.writer)?;
                     self.level += 1;
                     self.write_indent()?;
                     self.level -= 1;
@@ -264,7 +264,7 @@ impl<'a> YamlEmitter<'a> {
                 if (inline && self.compact) || h.is_empty() {
                     write!(self.writer, " ")?;
                 } else {
-                    write!(self.writer, "\n")?;
+                    writeln!(self.writer)?;
                     self.level += 1;
                     self.write_indent()?;
                     self.level -= 1;
