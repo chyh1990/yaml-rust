@@ -194,7 +194,7 @@ impl YamlLoader {
             anchor_map: BTreeMap::new(),
         };
         let mut parser = Parser::new(source.chars());
-        try!(parser.load(&mut loader, true));
+        parser.load(&mut loader, true)?;
         Ok(loader.docs)
     }
 }

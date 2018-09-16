@@ -49,7 +49,7 @@ pub type EmitResult = Result<(), EmitError>;
 
 // from serialize::json
 fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
-    try!(wr.write_str("\""));
+    wr.write_str("\"")?;
 
     let mut start = 0;
 
@@ -94,19 +94,19 @@ fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
         };
 
         if start < i {
-            try!(wr.write_str(&v[start..i]));
+            wr.write_str(&v[start..i])?;
         }
 
-        try!(wr.write_str(escaped));
+        wr.write_str(escaped)?;
 
         start = i + 1;
     }
 
     if start != v.len() {
-        try!(wr.write_str(&v[start..]));
+        wr.write_str(&v[start..])?;
     }
 
-    try!(wr.write_str("\""));
+    wr.write_str("\"")?;
     Ok(())
 }
 
@@ -139,7 +139,7 @@ impl<'a> YamlEmitter<'a> {
 
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
         // write DocumentStart
-        try!(write!(self.writer, "---\n"));
+        write!(self.writer, "---\n")?;
         self.level = -1;
         self.emit_node(doc)
     }
@@ -150,7 +150,7 @@ impl<'a> YamlEmitter<'a> {
         }
         for _ in 0..self.level {
             for _ in 0..self.best_indent {
-                try!(write!(self.writer, " "));
+                write!(self.writer, " ")?;
             }
         }
         Ok(())
@@ -162,30 +162,30 @@ impl<'a> YamlEmitter<'a> {
             Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
                 if need_quotes(v) {
-                    try!(escape_str(self.writer, v));
+                    escape_str(self.writer, v)?;
                 } else {
-                    try!(write!(self.writer, "{}", v));
+                    write!(self.writer, "{}", v)?;
                 }
                 Ok(())
             }
             Yaml::Boolean(v) => {
                 if v {
-                    try!(self.writer.write_str("true"));
+                    self.writer.write_str("true")?;
                 } else {
-                    try!(self.writer.write_str("false"));
+                    self.writer.write_str("false")?;
                 }
                 Ok(())
             }
             Yaml::Integer(v) => {
-                try!(write!(self.writer, "{}", v));
+                write!(self.writer, "{}", v)?;
                 Ok(())
             }
             Yaml::Real(ref v) => {
-                try!(write!(self.writer, "{}", v));
+                write!(self.writer, "{}", v)?;
                 Ok(())
             }
             Yaml::Null | Yaml::BadValue => {
-                try!(write!(self.writer, "~"));
+                write!(self.writer, "~")?;
                 Ok(())
             }
             // XXX(chenyh) Alias
@@ -195,16 +195,16 @@ impl<'a> YamlEmitter<'a> {
 
     fn emit_array(&mut self, v: &[Yaml]) -> EmitResult {
         if v.is_empty() {
-            try!(write!(self.writer, "[]"));
+            write!(self.writer, "[]")?;
         } else {
             self.level += 1;
             for (cnt, x) in v.iter().enumerate() {
                 if cnt > 0 {
-                    try!(write!(self.writer, "\n"));
-                    try!(self.write_indent());
+                    write!(self.writer, "\n")?;
+                    self.write_indent()?;
                 }
-                try!(write!(self.writer, "-"));
-                try!(self.emit_val(true, x));
+                write!(self.writer, "-")?;
+                self.emit_val(true, x)?;
             }
             self.level -= 1;
         }
@@ -213,7 +213,7 @@ impl<'a> YamlEmitter<'a> {
 
     fn emit_hash(&mut self, h: &Hash) -> EmitResult {
         if h.is_empty() {
-            try!(self.writer.write_str("{}"));
+            self.writer.write_str("{}")?;
         } else {
             self.level += 1;
             for (cnt, (k, v)) in h.iter().enumerate() {
@@ -222,20 +222,20 @@ impl<'a> YamlEmitter<'a> {
                     _ => false,
                 };
                 if cnt > 0 {
-                    try!(write!(self.writer, "\n"));
-                    try!(self.write_indent());
+                    write!(self.writer, "\n")?;
+                    self.write_indent()?;
                 }
                 if complex_key {
-                    try!(write!(self.writer, "?"));
-                    try!(self.emit_val(true, k));
-                    try!(write!(self.writer, "\n"));
-                    try!(self.write_indent());
-                    try!(write!(self.writer, ":"));
-                    try!(self.emit_val(true, v));
+                    write!(self.writer, "?")?;
+                    self.emit_val(true, k)?;
+                    write!(self.writer, "\n")?;
+                    self.write_indent()?;
+                    write!(self.writer, ":")?;
+                    self.emit_val(true, v)?;
                 } else {
-                    try!(self.emit_node(k));
-                    try!(write!(self.writer, ":"));
-                    try!(self.emit_val(false, v));
+                    self.emit_node(k)?;
+                    write!(self.writer, ":")?;
+                    self.emit_val(false, v)?;
                 }
             }
             self.level -= 1;
@@ -251,28 +251,28 @@ impl<'a> YamlEmitter<'a> {
         match *val {
             Yaml::Array(ref v) => {
                 if (inline && self.compact) || v.is_empty() {
-                    try!(write!(self.writer, " "));
+                    write!(self.writer, " ")?;
                 } else {
-                    try!(write!(self.writer, "\n"));
+                    write!(self.writer, "\n")?;
                     self.level += 1;
-                    try!(self.write_indent());
+                    self.write_indent()?;
                     self.level -= 1;
                 }
                 self.emit_array(v)
             }
             Yaml::Hash(ref h) => {
                 if (inline && self.compact) || h.is_empty() {
-                    try!(write!(self.writer, " "));
+                    write!(self.writer, " ")?;
                 } else {
-                    try!(write!(self.writer, "\n"));
+                    write!(self.writer, "\n")?;
                     self.level += 1;
-                    try!(self.write_indent());
+                    self.write_indent()?;
                     self.level -= 1;
                 }
                 self.emit_hash(h)
             }
             _ => {
-                try!(write!(self.writer, " "));
+                write!(self.writer, " ")?;
                 self.emit_node(val)
             }
         }

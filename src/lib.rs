@@ -102,7 +102,7 @@ mod tests {
     }
 
     fn try_fail(s: &str) -> Result<Vec<Yaml>, ScanError> {
-        let t = try!(YamlLoader::load_from_str(s));
+        let t = YamlLoader::load_from_str(s)?;
         Ok(t)
     }
 
