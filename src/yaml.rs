@@ -299,6 +299,12 @@ impl Yaml {
                 return Yaml::Integer(n.unwrap());
             }
         }
+        if v.starts_with("0b") {
+            let n = i64::from_str_radix(&v[2..], 2);
+            if n.is_ok() {
+                return Yaml::Integer(n.unwrap());
+            }
+        }
         if v.starts_with('+') && v[1..].parse::<i64>().is_ok() {
             return Yaml::Integer(v[1..].parse::<i64>().unwrap());
         }
@@ -492,6 +498,7 @@ a1: &DEFAULT
 - [ 0xF, 0xF ]
 - +12345
 - [ true, false ]
+- 0b101
 ";
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
@@ -524,6 +531,7 @@ a1: &DEFAULT
         assert_eq!(doc[24].as_i64().unwrap(), 12345);
         assert!(doc[25][0].as_bool().unwrap());
         assert!(!doc[25][1].as_bool().unwrap());
+        assert_eq!(doc[26].as_i64().unwrap(), 5);
     }
 
     #[test]
@@ -576,6 +584,7 @@ a1: &DEFAULT
 - !!bool false
 - 0xFF
 - 0o77
+- 0b101
 - +12345
 - -.INF
 - .NAN
@@ -600,6 +609,7 @@ a1: &DEFAULT
         assert_eq!(doc.next().unwrap().into_bool().unwrap(), false);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 255);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 63);
+        assert_eq!(doc.next().unwrap().into_i64().unwrap(), 5);
         assert_eq!(doc.next().unwrap().into_i64().unwrap(), 12345);
         assert_eq!(doc.next().unwrap().into_f64().unwrap(), f64::NEG_INFINITY);
         assert!(doc.next().unwrap().into_f64().is_some());
