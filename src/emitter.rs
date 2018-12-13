@@ -185,7 +185,7 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             }
             Yaml::Null | Yaml::BadValue => {
-                write!(self.writer, "~")?;
+                write!(self.writer, "null")?;
                 Ok(())
             }
             // XXX(chenyh) Alias
@@ -480,7 +480,7 @@ string1: "no"
 string2: "true"
 string3: "false"
 string4: "~"
-null0: ~
+null0: null
 ? - true
   - false
 : real_bools
