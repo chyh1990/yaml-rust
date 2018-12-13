@@ -483,10 +483,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         self.allow_simple_key();
                     }
                 }
-                '#' => while !is_breakz(self.ch()) {
-                    self.skip();
-                    self.lookahead(1);
-                },
+                '#' => {
+                    while !is_breakz(self.ch()) {
+                        self.skip();
+                        self.lookahead(1);
+                    }
+                }
                 _ => break,
             }
         }
@@ -929,11 +931,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.lookahead(1);
         }
 
-        if string.is_empty() || match self.ch() {
-            c if is_blankz(c) => false,
-            '?' | ':' | ',' | ']' | '}' | '%' | '@' | '`' => false,
-            _ => true,
-        } {
+        if string.is_empty()
+            || match self.ch() {
+                c if is_blankz(c) => false,
+                '?' | ':' | ',' | ']' | '}' | '%' | '@' | '`' => false,
+                _ => true,
+            }
+        {
             return Err(ScanError::new(start_mark, "while scanning an anchor or alias, did not find expected alphabetic or numeric character"));
         }
 
