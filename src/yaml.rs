@@ -66,6 +66,14 @@ fn parse_f64(v: &str) -> Option<f64> {
     }
 }
 
+// Wheteher or not the value represent null according to core schema
+fn is_null(v: &str) -> bool {
+    match v {
+        "null" | "Null" | "NULL" | "~" => true,
+        _ => false,
+    }
+}
+
 pub struct YamlLoader {
     docs: Vec<Yaml>,
     // states
@@ -128,10 +136,13 @@ impl MarkedEventReceiver for YamlLoader {
                                 Some(_) => Yaml::Real(v),
                                 None => Yaml::BadValue,
                             },
-                            "null" => match v.as_ref() {
-                                "~" | "null" => Yaml::Null,
-                                _ => Yaml::BadValue,
-                            },
+                            "null" => {
+                                if is_null(&v) {
+                                    Yaml::Null
+                                } else {
+                                    Yaml::BadValue
+                                }
+                            }
                             _ => Yaml::String(v),
                         }
                     } else {
@@ -303,9 +314,9 @@ impl Yaml {
             return Yaml::Integer(v[1..].parse::<i64>().unwrap());
         }
         match v {
-            "~" | "null" => Yaml::Null,
             "true" => Yaml::Boolean(true),
             "false" => Yaml::Boolean(false),
+            _ if is_null(v) => Yaml::Null,
             _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
             // try parsing as f64
             _ if parse_f64(v).is_some() => Yaml::Real(v.to_owned()),
@@ -474,6 +485,8 @@ a1: &DEFAULT
 - -1e4
 - ~
 - null
+- Null
+- NULL
 - true
 - false
 - !!str 0
@@ -505,25 +518,27 @@ a1: &DEFAULT
         assert_eq!(doc[6].as_f64().unwrap(), -1e4);
         assert!(doc[7].is_null());
         assert!(doc[8].is_null());
-        assert_eq!(doc[9].as_bool().unwrap(), true);
-        assert_eq!(doc[10].as_bool().unwrap(), false);
-        assert_eq!(doc[11].as_str().unwrap(), "0");
-        assert_eq!(doc[12].as_i64().unwrap(), 100);
-        assert_eq!(doc[13].as_f64().unwrap(), 2.0);
-        assert!(doc[14].is_null());
-        assert_eq!(doc[15].as_bool().unwrap(), true);
-        assert_eq!(doc[16].as_bool().unwrap(), false);
-        assert_eq!(doc[17].as_i64().unwrap(), 255);
-        assert!(doc[18].is_badvalue());
-        assert!(doc[19].is_badvalue());
+        assert!(doc[9].is_null());
+        assert!(doc[10].is_null());
+        assert_eq!(doc[11].as_bool().unwrap(), true);
+        assert_eq!(doc[12].as_bool().unwrap(), false);
+        assert_eq!(doc[13].as_str().unwrap(), "0");
+        assert_eq!(doc[14].as_i64().unwrap(), 100);
+        assert_eq!(doc[15].as_f64().unwrap(), 2.0);
+        assert!(doc[16].is_null());
+        assert_eq!(doc[17].as_bool().unwrap(), true);
+        assert_eq!(doc[18].as_bool().unwrap(), false);
+        assert_eq!(doc[19].as_i64().unwrap(), 255);
         assert!(doc[20].is_badvalue());
         assert!(doc[21].is_badvalue());
-        assert_eq!(doc[22].as_i64().unwrap(), 63);
-        assert_eq!(doc[23][0].as_i64().unwrap(), 15);
-        assert_eq!(doc[23][1].as_i64().unwrap(), 15);
-        assert_eq!(doc[24].as_i64().unwrap(), 12345);
-        assert!(doc[25][0].as_bool().unwrap());
-        assert!(!doc[25][1].as_bool().unwrap());
+        assert!(doc[22].is_badvalue());
+        assert!(doc[23].is_badvalue());
+        assert_eq!(doc[24].as_i64().unwrap(), 63);
+        assert_eq!(doc[25][0].as_i64().unwrap(), 15);
+        assert_eq!(doc[25][1].as_i64().unwrap(), 15);
+        assert_eq!(doc[26].as_i64().unwrap(), 12345);
+        assert!(doc[27][0].as_bool().unwrap());
+        assert!(!doc[27][1].as_bool().unwrap());
     }
 
     #[test]
