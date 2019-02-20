@@ -146,6 +146,7 @@ pub struct Scanner<T> {
 
     stream_start_produced: bool,
     stream_end_produced: bool,
+    adjacent_value_allowed_at: usize,
     simple_key_allowed: bool,
     simple_keys: Vec<SimpleKey>,
     indent: isize,
@@ -216,6 +217,13 @@ fn as_hex(c: char) -> u32 {
         _ => unreachable!(),
     }
 }
+#[inline]
+fn is_flow(c: char) -> bool {
+    match c {
+        ',' | '[' | ']' | '{' | '}' => true,
+        _ => false,
+    }
+}
 
 pub type ScanResult = Result<(), ScanError>;
 
@@ -231,6 +239,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
             stream_start_produced: false,
             stream_end_produced: false,
+            adjacent_value_allowed_at: 0,
             simple_key_allowed: true,
             simple_keys: Vec::new(),
             indent: -1,
@@ -387,8 +396,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             '}' => self.fetch_flow_collection_end(TokenType::FlowMappingEnd),
             ',' => self.fetch_flow_entry(),
             '-' if is_blankz(nc) => self.fetch_block_entry(),
-            '?' if self.flow_level > 0 || is_blankz(nc) => self.fetch_key(),
-            ':' if self.flow_level > 0 || is_blankz(nc) => self.fetch_value(),
+            '?' if is_blankz(nc) => self.fetch_key(),
+            ':' if is_blankz(nc)
+                || (self.flow_level > 0
+                    && (is_flow(nc) || self.mark.index == self.adjacent_value_allowed_at)) =>
+            {
+                self.fetch_value()
+            }
             // Is it an alias?
             '*' => self.fetch_anchor(true),
             // Is it an anchor?
@@ -1258,6 +1272,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         let tok = self.scan_flow_scalar(single)?;
 
+        // From spec: To ensure JSON compatibility, if a key inside a flow mapping is JSON-like,
+        // YAML allows the following value to be specified adjacent to the “:”.
+        self.adjacent_value_allowed_at = self.mark.index;
+
         self.tokens.push_back(tok);
         Ok(())
     }
@@ -1498,16 +1516,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 break;
             }
             while !is_blankz(self.ch()) {
-                if self.flow_level > 0 && self.ch() == ':' && is_blankz(self.ch()) {
-                    return Err(ScanError::new(
-                        start_mark,
-                        "while scanning a plain scalar, found unexpected ':'",
-                    ));
-                }
-                // indicators ends a plain scalar
+                // indicators can end a plain scalar, see 7.3.3. Plain Style
                 match self.ch() {
-                    ':' if is_blankz(self.buffer[1]) => break,
-                    ',' | ':' | '?' | '[' | ']' | '{' | '}' if self.flow_level > 0 => break,
+                    ':' if is_blankz(self.buffer[1])
+                        || (self.flow_level > 0 && is_flow(self.buffer[1])) =>
+                    {
+                        break;
+                    }
+                    ',' | '[' | ']' | '{' | '}' if self.flow_level > 0 => break,
                     _ => {}
                 }
 
@@ -2069,6 +2085,71 @@ key:
         next_scalar!(p, TScalarStyle::Plain, "bar");
         next!(p, FlowEntry);
         next!(p, FlowMappingEnd);
+        next!(p, StreamEnd);
+        end!(p);
+    }
+
+    #[test]
+    fn test_plain_scalar_starting_with_indicators_in_flow() {
+        // "Plain scalars must not begin with most indicators, as this would cause ambiguity with
+        // other YAML constructs. However, the “:”, “?” and “-” indicators may be used as the first
+        // character if followed by a non-space “safe” character, as this causes no ambiguity."
+
+        let s = "{a: :b}";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStart(..));
+        next!(p, FlowMappingStart);
+        next!(p, Key);
+        next_scalar!(p, TScalarStyle::Plain, "a");
+        next!(p, Value);
+        next_scalar!(p, TScalarStyle::Plain, ":b");
+        next!(p, FlowMappingEnd);
+        next!(p, StreamEnd);
+        end!(p);
+
+        let s = "{a: ?b}";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStart(..));
+        next!(p, FlowMappingStart);
+        next!(p, Key);
+        next_scalar!(p, TScalarStyle::Plain, "a");
+        next!(p, Value);
+        next_scalar!(p, TScalarStyle::Plain, "?b");
+        next!(p, FlowMappingEnd);
+        next!(p, StreamEnd);
+        end!(p);
+    }
+
+    #[test]
+    fn test_plain_scalar_starting_with_indicators_in_block() {
+        let s = ":a";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStart(..));
+        next_scalar!(p, TScalarStyle::Plain, ":a");
+        next!(p, StreamEnd);
+        end!(p);
+
+        let s = "?a";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStart(..));
+        next_scalar!(p, TScalarStyle::Plain, "?a");
+        next!(p, StreamEnd);
+        end!(p);
+    }
+
+    #[test]
+    fn test_plain_scalar_containing_indicators_in_block() {
+        let s = "a:,b";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStart(..));
+        next_scalar!(p, TScalarStyle::Plain, "a:,b");
+        next!(p, StreamEnd);
+        end!(p);
+
+        let s = ":,b";
+        let mut p = Scanner::new(s.chars());
+        next!(p, StreamStart(..));
+        next_scalar!(p, TScalarStyle::Plain, ":,b");
         next!(p, StreamEnd);
         end!(p);
     }

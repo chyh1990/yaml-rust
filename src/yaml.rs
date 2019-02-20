@@ -40,7 +40,7 @@ pub enum Yaml {
     Array(self::Array),
     /// YAML hash, can be accessed as a `LinkedHashMap`.
     ///
-    /// Itertion order will match the order of insertion into the map.
+    /// Insertion order will match the order of insertion into the map.
     Hash(self::Hash),
     /// Alias, not fully supported yet.
     Alias(usize),
