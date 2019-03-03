@@ -334,7 +334,7 @@ fn need_quotes(string: &str) -> bool {
             // http://yaml.org/type/null.html
             "null", "Null", "NULL", "~",
         ]
-            .contains(&string)
+        .contains(&string)
         || string.starts_with('.')
         || string.parse::<i64>().is_ok()
         || string.parse::<f64>().is_ok()

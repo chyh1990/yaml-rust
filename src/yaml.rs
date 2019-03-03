@@ -409,7 +409,8 @@ a4:
 a5: 'single_quoted'
 a6: \"double_quoted\"
 a7: 你好
-".to_owned();
+"
+        .to_owned();
         let out = YamlLoader::load_from_str(&s).unwrap();
         let doc = &out[0];
         assert_eq!(doc["a7"].as_str().unwrap(), "你好");
@@ -652,7 +653,8 @@ hash:
     with:
         indentations
 "#,
-        ).unwrap()
+        )
+        .unwrap()
         .into_iter()
         .next()
         .unwrap();
@@ -663,7 +665,8 @@ hash:
   with:
     indentations
 "#,
-        ).unwrap()
+        )
+        .unwrap()
         .into_iter()
         .next()
         .unwrap();
@@ -674,7 +677,8 @@ hash:
  with:
   indentations
 "#,
-        ).unwrap()
+        )
+        .unwrap()
         .into_iter()
         .next()
         .unwrap();
@@ -685,7 +689,8 @@ hash:
      with:
                indentations
 "#,
-        ).unwrap()
+        )
+        .unwrap()
         .into_iter()
         .next()
         .unwrap();
