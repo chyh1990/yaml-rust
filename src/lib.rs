@@ -36,7 +36,7 @@
 //!
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/yaml-rust/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/yaml-rust/0.4.3")]
 #![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
 #![cfg_attr(feature = "cargo-clippy", warn(cyclomatic_complexity))]
 #![cfg_attr(
