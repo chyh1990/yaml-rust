@@ -13,4 +13,4 @@ readme = "README.md"
 linked-hash-map = ">=0.0.9, <0.6"
 
 [dev-dependencies]
-quickcheck = "0.7"
+quickcheck = "0.8"
