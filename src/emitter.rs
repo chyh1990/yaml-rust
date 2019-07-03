@@ -41,6 +41,7 @@ pub struct YamlEmitter<'a> {
     writer: &'a mut fmt::Write,
     best_indent: usize,
     compact: bool,
+    multiline_strings: bool,
 
     level: isize,
 }
@@ -117,6 +118,7 @@ impl<'a> YamlEmitter<'a> {
             best_indent: 2,
             compact: true,
             level: -1,
+            multiline_strings: false,
         }
     }
 
@@ -135,6 +137,42 @@ impl<'a> YamlEmitter<'a> {
     /// Determine if this emitter is using 'compact inline notation'.
     pub fn is_compact(&self) -> bool {
         self.compact
+    }
+
+    /// Render strings containing multiple lines in [literal style].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
+    ///
+    /// let input = r#"{foo: "bar!\nbar!", baz: 42}"#;
+    /// let parsed = YamlLoader::load_from_str(input).unwrap();
+    /// eprintln!("{:?}", parsed);
+    ///
+    /// let mut output = String::new();
+    /// # {
+    /// let mut emitter = YamlEmitter::new(&mut output);
+    /// emitter.multiline_strings(true);
+    /// emitter.dump(&parsed[0]).unwrap();
+    /// # }
+    ///
+    /// assert_eq!(output.as_str(), "\
+    /// ---
+    /// foo: |
+    ///   bar!
+    ///   bar!
+    /// baz: 42");
+    /// ```
+    ///
+    /// [literal style]: https://yaml.org/spec/1.2/spec.html#id2795688
+    pub fn multiline_strings(&mut self, multiline_strings: bool) {
+        self.multiline_strings = multiline_strings
+    }
+
+    /// Determine if this emitter will emit multiline strings when appropriate.
+    pub fn is_multiline_strings(&self) -> bool {
+        self.multiline_strings
     }
 
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
@@ -161,11 +199,24 @@ impl<'a> YamlEmitter<'a> {
             Yaml::Array(ref v) => self.emit_array(v),
             Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
-                if need_quotes(v) {
-                    escape_str(self.writer, v)?;
+                if self.multiline_strings && v.contains('\n') {
+                    write!(self.writer, "|")?;
+                    self.level += 1;
+                    for line in v.lines() {
+                        writeln!(self.writer)?;
+                        self.write_indent()?;
+                        // It's literal text, so don't escape special chars!
+                        write!(self.writer, "{}", line)?;
+                    }
+                    self.level -= 1;
                 } else {
-                    write!(self.writer, "{}", v)?;
+                    if need_quotes(v) {
+                        escape_str(self.writer, v)?;
+                    } else {
+                        write!(self.writer, "{}", v)?;
+                    }
                 }
+
                 Ok(())
             }
             Yaml::Boolean(v) => {
