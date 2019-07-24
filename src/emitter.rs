@@ -336,6 +336,7 @@ fn need_quotes(string: &str) -> bool {
         ]
         .contains(&string)
         || string.starts_with('.')
+        || string.starts_with("0x")
         || string.parse::<i64>().is_ok()
         || string.parse::<f64>().is_ok()
 }
