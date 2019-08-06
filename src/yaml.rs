@@ -100,7 +100,7 @@ pub struct YamlLoader<'a> {
     doc_stack: Vec<(Yaml, usize)>,
     key_stack: Vec<Yaml>,
     anchor_map: BTreeMap<usize, Yaml>,
-    scalar_parser: Vec<&'a YamlScalarParser>,
+    scalar_parser: Vec<&'a dyn YamlScalarParser>,
 }
 
 impl<'a> MarkedEventReceiver for YamlLoader<'a> {
@@ -225,7 +225,7 @@ impl<'a> YamlLoader<'a> {
         }
     }
 
-    pub fn register_scalar_parser(&mut self, parser: &'a YamlScalarParser) {
+    pub fn register_scalar_parser(&mut self, parser: &'a dyn YamlScalarParser) {
         self.scalar_parser.push(parser);
     }
 
