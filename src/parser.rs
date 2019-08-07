@@ -72,6 +72,7 @@ pub struct Parser<T> {
     current: Option<(Event, Marker)>,
     anchors: HashMap<String, usize>,
     anchor_id: usize,
+    tag_directives: HashMap<String, String>,
 }
 
 pub trait EventReceiver {
@@ -103,6 +104,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             anchors: HashMap::new(),
             // valid anchor_id starts from 1
             anchor_id: 1,
+            tag_directives: HashMap::new(),
         }
     }
 
@@ -365,23 +367,40 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn parser_process_directives(&mut self) -> Result<(), ScanError> {
+        enum DirectiveAction {
+            None,
+            Tag { handle: String, prefix: String },
+        }
+
         loop {
-            match self.peek_token()?.1 {
+            // Without NLL, split the peek and the action
+            let action = match self.peek_token()?.1 {
                 TokenType::VersionDirective(_, _) => {
                     // XXX parsing with warning according to spec
                     //if major != 1 || minor > 2 {
                     //    return Err(ScanError::new(tok.0,
                     //        "found incompatible YAML document"));
                     //}
+                    DirectiveAction::None
                 }
-                TokenType::TagDirective(..) => {
-                    // TODO add tag directive
+                TokenType::TagDirective(ref handle, ref prefix) => {
+                    let handle = String::clone(handle);
+                    let mut prefix = String::clone(prefix);
+                    prefix.pop();
+                    DirectiveAction::Tag { handle, prefix }
                 }
                 _ => break,
+            };
+
+            match action {
+                DirectiveAction::Tag { handle, prefix } => {
+                    self.tag_directives.insert(handle, prefix);
+                }
+                _ => (),
             }
+
             self.skip();
         }
-        // TODO tag directive
         Ok(())
     }
 
@@ -502,7 +521,24 @@ impl<T: Iterator<Item = char>> Parser<T> {
             Token(_, TokenType::Scalar(..)) => {
                 self.pop_state();
                 if let Token(mark, TokenType::Scalar(style, v)) = self.fetch_token() {
-                    Ok((Event::Scalar(v, style, anchor_id, tag), mark))
+                    Ok((
+                        if let Some(TokenType::Tag(handle, suffix)) = tag {
+                            let t = self.tag_directives.get(&handle);
+                            Event::Scalar(
+                                v,
+                                style,
+                                anchor_id,
+                                Some(if let Some(s) = t {
+                                    TokenType::Tag((*s).clone(), suffix)
+                                } else {
+                                    TokenType::Tag(handle, suffix)
+                                }),
+                            )
+                        } else {
+                            Event::Scalar(v, style, anchor_id, tag)
+                        },
+                        mark,
+                    ))
                 } else {
                     unreachable!()
                 }

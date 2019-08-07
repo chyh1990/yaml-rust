@@ -67,7 +67,7 @@ impl Error for ScanError {
         self.info.as_ref()
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         None
     }
 }
@@ -199,7 +199,7 @@ fn is_digit(c: char) -> bool {
 #[inline]
 fn is_alpha(c: char) -> bool {
     match c {
-        '0'...'9' | 'a'...'z' | 'A'...'Z' => true,
+        '0'..='9' | 'a'..='z' | 'A'..='Z' => true,
         '_' | '-' => true,
         _ => false,
     }
@@ -211,9 +211,9 @@ fn is_hex(c: char) -> bool {
 #[inline]
 fn as_hex(c: char) -> u32 {
     match c {
-        '0'...'9' => (c as u32) - ('0' as u32),
-        'a'...'f' => (c as u32) - ('a' as u32) + 10,
-        'A'...'F' => (c as u32) - ('A' as u32) + 10,
+        '0'..='9' => (c as u32) - ('0' as u32),
+        'a'..='f' => (c as u32) - ('a' as u32) + 10,
+        'A'..='F' => (c as u32) - ('A' as u32) + 10,
         _ => unreachable!(),
     }
 }

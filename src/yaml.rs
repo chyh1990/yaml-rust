@@ -66,16 +66,44 @@ fn parse_f64(v: &str) -> Option<f64> {
     }
 }
 
-pub struct YamlLoader {
+/// A `YamlScalarParser` is a parser that change the parsing of a yaml scalar value
+/// like a tag
+///
+/// # Examples
+///
+/// ```
+///use yaml_rust::yaml;
+///use yaml_rust::scanner;
+///
+///struct HelloTagParser;
+///
+///impl yaml::YamlScalarParser for HelloTagParser {
+///    fn parse_scalar(&self, tag: &scanner::TokenType, value: &str) -> Option<yaml::Yaml> {
+///        if let scanner::TokenType::Tag(ref handle, ref suffix) = *tag {
+///            if *handle == "!" && *suffix == "hello" {
+///                return Some(yaml::Yaml::String("Hello ".to_string() + value))
+///            }
+///        }
+///        None
+///    }
+///}
+/// ```
+pub trait YamlScalarParser {
+    fn parse_scalar(&self, tag: &TokenType, value: &str) -> Option<Yaml>;
+}
+
+#[derive(Default)]
+pub struct YamlLoader<'a> {
     docs: Vec<Yaml>,
     // states
     // (current node, anchor_id) tuple
     doc_stack: Vec<(Yaml, usize)>,
     key_stack: Vec<Yaml>,
     anchor_map: BTreeMap<usize, Yaml>,
+    scalar_parser: Vec<&'a dyn YamlScalarParser>,
 }
 
-impl MarkedEventReceiver for YamlLoader {
+impl<'a> MarkedEventReceiver for YamlLoader<'a> {
     fn on_event(&mut self, ev: Event, _: Marker) {
         // println!("EV {:?}", ev);
         match ev {
@@ -107,6 +135,17 @@ impl MarkedEventReceiver for YamlLoader {
                 self.insert_new_node(node);
             }
             Event::Scalar(v, style, aid, tag) => {
+                if let Some(ref tag) = tag {
+                    let mut yaml = None;
+                    for parser in &self.scalar_parser {
+                        yaml = parser.parse_scalar(tag, &v);
+                    }
+                    if let Some(yaml) = yaml {
+                        self.insert_new_node((yaml, aid));
+                        return;
+                    }
+                }
+
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v)
                 } else if let Some(TokenType::Tag(ref handle, ref suffix)) = tag {
@@ -157,7 +196,7 @@ impl MarkedEventReceiver for YamlLoader {
     }
 }
 
-impl YamlLoader {
+impl<'a> YamlLoader<'a> {
     fn insert_new_node(&mut self, node: (Yaml, usize)) {
         // valid anchor id starts from 1
         if node.1 > 0 {
@@ -186,16 +225,28 @@ impl YamlLoader {
         }
     }
 
+    pub fn register_scalar_parser(&mut self, parser: &'a dyn YamlScalarParser) {
+        self.scalar_parser.push(parser);
+    }
+
     pub fn load_from_str(source: &str) -> Result<Vec<Yaml>, ScanError> {
-        let mut loader = YamlLoader {
+        YamlLoader::new().parse_from_str(source)
+    }
+
+    pub fn new() -> YamlLoader<'a> {
+        YamlLoader {
             docs: Vec::new(),
             doc_stack: Vec::new(),
             key_stack: Vec::new(),
             anchor_map: BTreeMap::new(),
-        };
+            scalar_parser: Vec::new(),
+        }
+    }
+
+    pub fn parse_from_str(mut self, source: &str) -> Result<Vec<Yaml>, ScanError> {
         let mut parser = Parser::new(source.chars());
-        parser.load(&mut loader, true)?;
-        Ok(loader.docs)
+        parser.load(&mut self, true)?;
+        Ok(self.docs)
     }
 }
 
@@ -367,6 +418,7 @@ impl Iterator for YamlIter {
 
 #[cfg(test)]
 mod test {
+    use scanner::*;
     use std::f64;
     use yaml::*;
     #[test]
@@ -735,5 +787,45 @@ subcommands3:
     fn test_recursion_depth_check_arrays() {
         let s = "[".repeat(10_000) + &"]".repeat(10_000);
         assert!(YamlLoader::load_from_str(&s).is_err());
+    }
+
+    struct HelloTagParser;
+
+    impl YamlScalarParser for HelloTagParser {
+        fn parse_scalar(&self, tag: &TokenType, value: &str) -> Option<Yaml> {
+            if let TokenType::Tag(ref handle, ref suffix) = *tag {
+                if (*handle == "!" || *handle == "yaml-rust.hello.prefix") && *suffix == "hello" {
+                    return Some(Yaml::String("Hello ".to_string() + value));
+                }
+            }
+            None
+        }
+    }
+
+    #[test]
+    fn test_scalar_parser() {
+        let parser = HelloTagParser;
+        let mut loader = YamlLoader::new();
+        loader.register_scalar_parser(&parser);
+        let out = loader.parse_from_str("!hello world").unwrap();
+        let doc = &out[0];
+        assert_eq!(doc.as_str().unwrap(), "Hello world")
+    }
+
+    #[test]
+    fn test_tag_directive() {
+        let parser = HelloTagParser;
+        let mut loader = YamlLoader::new();
+        loader.register_scalar_parser(&parser);
+        let out = loader
+            .parse_from_str(
+                "%YAML 1.2
+%TAG ! yaml-rust.hello.prefix:
+---
+!hello world",
+            )
+            .unwrap();
+        let doc = &out[0];
+        assert_eq!(doc.as_str().unwrap(), "Hello world")
     }
 }
