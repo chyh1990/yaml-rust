@@ -5,6 +5,9 @@ matrix:
     - rust: stable
     - rust: beta
     - rust: nightly
+    - rust: 1.27.0
+      script:
+          cargo build
     - rust: 1.28.0
     - rust: nightly
       env: CLIPPY
