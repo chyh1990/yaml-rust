@@ -367,23 +367,38 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn parser_process_directives(&mut self) -> Result<(), ScanError> {
+        enum DirectiveAction {
+            None,
+            Tag { handle: String, prefix: String },
+        }
+
         loop {
-            match self.peek_token()?.1 {
+            // Without NLL, split the peek and the action
+            let action = match self.peek_token()?.1 {
                 TokenType::VersionDirective(_, _) => {
                     // XXX parsing with warning according to spec
                     //if major != 1 || minor > 2 {
                     //    return Err(ScanError::new(tok.0,
                     //        "found incompatible YAML document"));
                     //}
+                    DirectiveAction::None
                 }
                 TokenType::TagDirective(ref handle, ref prefix) => {
-                    let handle = String::from(handle);
-                    let mut prefix = String::from(prefix);
+                    let handle = String::clone(handle);
+                    let mut prefix = String::clone(prefix);
                     prefix.pop();
-                    self.tag_directives.insert(handle, prefix);
+                    DirectiveAction::Tag { handle, prefix }
                 }
                 _ => break,
+            };
+
+            match action {
+                DirectiveAction::Tag { handle, prefix } => {
+                    self.tag_directives.insert(handle, prefix);
+                }
+                _ => (),
             }
+
             self.skip();
         }
         Ok(())
