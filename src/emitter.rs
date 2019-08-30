@@ -17,7 +17,7 @@ impl Error for EmitError {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         None
     }
 }
@@ -38,7 +38,7 @@ impl From<fmt::Error> for EmitError {
 }
 
 pub struct YamlEmitter<'a> {
-    writer: &'a mut fmt::Write,
+    writer: &'a mut dyn fmt::Write,
     best_indent: usize,
     compact: bool,
 
@@ -48,7 +48,7 @@ pub struct YamlEmitter<'a> {
 pub type EmitResult = Result<(), EmitError>;
 
 // from serialize::json
-fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
+fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
     wr.write_str("\"")?;
 
     let mut start = 0;
@@ -111,7 +111,7 @@ fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
 }
 
 impl<'a> YamlEmitter<'a> {
-    pub fn new(writer: &'a mut fmt::Write) -> YamlEmitter {
+    pub fn new(writer: &'a mut dyn fmt::Write) -> YamlEmitter {
         YamlEmitter {
             writer,
             best_indent: 2,
@@ -141,7 +141,10 @@ impl<'a> YamlEmitter<'a> {
         // write DocumentStart
         writeln!(self.writer, "---")?;
         self.level = -1;
-        self.emit_node(doc)
+        self.emit_node(false, doc)?;
+        writeln!(self.writer)?;
+        write!(self.writer, "...")?;
+        Ok(())
     }
 
     fn write_indent(&mut self) -> EmitResult {
@@ -156,13 +159,45 @@ impl<'a> YamlEmitter<'a> {
         Ok(())
     }
 
-    fn emit_node(&mut self, node: &Yaml) -> EmitResult {
+    fn emit_node(&mut self, is_val: bool, node: &Yaml) -> EmitResult {
         match *node {
             Yaml::Array(ref v) => self.emit_array(v),
             Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
                 if need_quotes(v) {
-                    escape_str(self.writer, v)?;
+                    // For multi-line string values, use a block scalar.
+                    if is_val && v.contains("\n") && is_valid_literal_block_scalar(v) {
+                        write!(
+                            self.writer,
+                            "|{}{}",
+                            // If the string ends in a newline, we need to have YAML preserve the
+                            // newline characters using the "keep" chomp indicator.
+                            if v.ends_with("\n") {
+                                "+"
+                            // Otherwise, it should strip them using the "strip" chomp indicator.
+                            } else {
+                                "-"
+                            },
+                            // Number of additional indent characters.
+                            self.best_indent,
+                        )?;
+                        self.level += 1;
+                        let mut lines = v.split("\n").peekable();
+                        while let Some(line) = lines.next() {
+                            // The last line is special: if it's blank, that means the string ends
+                            // in a newline character and we used the "keep" chomp indicator above.
+                            // In that case, we should suppress the last, empty line. Otherwise,
+                            // print it normally.
+                            if lines.peek().is_some() || !line.is_empty() {
+                                writeln!(self.writer)?;
+                                self.write_indent()?;
+                                write!(self.writer, "{}", line)?;
+                            }
+                        }
+                        self.level -= 1;
+                    } else {
+                        escape_str(self.writer, v)?;
+                    }
                 } else {
                     write!(self.writer, "{}", v)?;
                 }
@@ -233,7 +268,7 @@ impl<'a> YamlEmitter<'a> {
                     write!(self.writer, ":")?;
                     self.emit_val(true, v)?;
                 } else {
-                    self.emit_node(k)?;
+                    self.emit_node(false, k)?;
                     write!(self.writer, ":")?;
                     self.emit_val(false, v)?;
                 }
@@ -273,7 +308,7 @@ impl<'a> YamlEmitter<'a> {
             }
             _ => {
                 write!(self.writer, " ")?;
-                self.emit_node(val)
+                self.emit_node(true, val)
             }
         }
     }
@@ -316,12 +351,12 @@ fn need_quotes(string: &str) -> bool {
             | '\"'
             | '\''
             | '\\'
-            | '\0'...'\x06'
+            | '\0'..='\x06'
             | '\t'
             | '\n'
             | '\r'
-            | '\x0e'...'\x1a'
-            | '\x1c'...'\x1f' => true,
+            | '\x0e'..='\x1a'
+            | '\x1c'..='\x1f' => true,
             _ => false,
         })
         || [
@@ -338,6 +373,18 @@ fn need_quotes(string: &str) -> bool {
         || string.starts_with('.')
         || string.parse::<i64>().is_ok()
         || string.parse::<f64>().is_ok()
+}
+
+/// Check if the string can be expressed a valid literal block scalar.
+/// The YAML spec supports all of the following in block literals except #xFEFF:
+///      #x9 | #xA | [#x20-#x7E]          /* 8 bit */
+///   | #x85 | [#xA0-#xD7FF] | [#xE000-#xFFFD] /* 16 bit */
+///   | [#x10000-#x10FFFF]                     /* 32 bit */
+fn is_valid_literal_block_scalar(string: &str) -> bool {
+    string.chars().all(|character: char| match character {
+        '\t' | '\n' | '\x20'..='\x7e' | '\u{0085}' | '\u{00a0}'..='\u{d7fff}' => true,
+        _ => false,
+    })
 }
 
 #[cfg(test)]
@@ -358,7 +405,7 @@ a3: [1, 2, 3]
 a4:
     - [a1, a2]
     - 2
-";
+...";
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
@@ -448,7 +495,8 @@ products:
   "{}": empty hash key
 x: test
 y: avoid quoting here
-z: string with spaces"#;
+z: string with spaces
+..."#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
@@ -458,7 +506,9 @@ z: string with spaces"#;
             emitter.dump(doc).unwrap();
         }
 
-        assert_eq!(s, writer, "actual:\n\n{}\n", writer);
+        let docs2 = YamlLoader::load_from_str(&writer).unwrap();
+
+        assert_eq!(docs, docs2, "actual:\n\n{}\n", writer);
     }
 
     #[test]
@@ -506,7 +556,8 @@ null0: ~
   - "OFF"
 : false_bools
 bool0: true
-bool1: false"#;
+bool1: false
+..."#;
 
         let docs = YamlLoader::load_from_str(&input).unwrap();
         let doc = &docs[0];
@@ -543,7 +594,8 @@ a:
 e:
   - f
   - g
-  - h: []"#
+  - h: []
+..."#
         } else {
             r#"---
 a:
@@ -554,7 +606,8 @@ e:
   - f
   - g
   -
-    h: []"#
+    h: []
+..."#
         };
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
@@ -577,7 +630,8 @@ a:
   - - c
     - d
     - - e
-      - f"#;
+      - f
+..."#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
@@ -601,7 +655,8 @@ a:
     - d
     - - e
       - - f
-      - - e"#;
+      - - e
+..."#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
@@ -623,7 +678,8 @@ a:
   b:
     c:
       d:
-        e: f"#;
+        e: f
+..."#;
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
