@@ -382,7 +382,7 @@ fn need_quotes(string: &str) -> bool {
 ///   | [#x10000-#x10FFFF]                     /* 32 bit */
 fn is_valid_literal_block_scalar(string: &str) -> bool {
     string.chars().all(|character: char| match character {
-        '\t' | '\n' | '\x20'..='\x7e' | '\u{0085}' | '\u{00a0}'..='\u{d7fff}' => true,
+        '\t' | '\n' | '\x20'...'\x7e' | '\u{0085}' | '\u{00a0}'...'\u{d7ff}' => true,
         _ => false,
     })
 }
