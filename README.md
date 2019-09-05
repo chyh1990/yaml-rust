@@ -103,6 +103,10 @@ so it may not be a huge problem for most users.
 * Tag directive
 * Alias while desearilization
 
+## Minimum Rust version policy
+
+This crate's minimum supported `rustc` version is 1.28, as this is the currently known minimum version for [`regex`](https://crates.io/crates/regex#minimum-rust-version-policy) as well.
+
 ## License
 
 Licensed under either of
