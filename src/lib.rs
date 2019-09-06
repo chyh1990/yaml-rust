@@ -24,7 +24,7 @@
 //! # Examples
 //!
 //! ```
-//! use yaml_rust::{YamlLoader, YamlEmitter};
+//! use yaml_rust::{YamlLoader, YamlEmitter, YamlNode};
 //!
 //! let docs = YamlLoader::load_from_str("[1, 2, 3]").unwrap();
 //! let doc = &docs[0]; // select the first document
@@ -44,6 +44,7 @@
     allow(match_same_arms, should_implement_trait)
 )]
 
+extern crate derivative;
 extern crate linked_hash_map;
 
 pub mod emitter;
@@ -54,8 +55,8 @@ pub mod yaml;
 // reexport key APIs
 pub use emitter::{EmitError, YamlEmitter};
 pub use parser::Event;
-pub use scanner::ScanError;
-pub use yaml::{Yaml, YamlLoader};
+pub use scanner::{Marker, ScanError};
+pub use yaml::{Node, Yaml, YamlLoader, YamlMarked, YamlNode};
 
 #[cfg(test)]
 mod tests {
