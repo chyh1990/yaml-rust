@@ -101,7 +101,7 @@ so it may not be a huge problem for most users.
 
 * Encoder
 * Tag directive
-* Alias while desearilization
+* Alias while deserialization
 
 ## Minimum Rust version policy
 
