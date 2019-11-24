@@ -1100,7 +1100,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 if self.ch() == '0' {
                     return Err(ScanError::new(
                         start_mark,
-                        "while scanning a block scalar, found an intendation indicator equal to 0",
+                        "while scanning a block scalar, found an indentation indicator equal to 0",
                     ));
                 }
                 increment = (self.ch() as usize) - ('0' as usize);
@@ -1110,7 +1110,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             if self.ch() == '0' {
                 return Err(ScanError::new(
                     start_mark,
-                    "while scanning a block scalar, found an intendation indicator equal to 0",
+                    "while scanning a block scalar, found an indentation indicator equal to 0",
                 ));
             }
 
@@ -1200,7 +1200,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.lookahead(2);
             self.read_break(&mut leading_break);
 
-            // Eat the following intendation spaces and line breaks.
+            // Eat the following indentation spaces and line breaks.
             self.block_scalar_breaks(&mut indent, &mut trailing_breaks)?;
         }
 
@@ -1239,10 +1239,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 max_indent = self.mark.col;
             }
 
-            // Check for a tab character messing the intendation.
+            // Check for a tab character messing the indentation.
             if (*indent == 0 || self.mark.col < *indent) && self.buffer[0] == '\t' {
                 return Err(ScanError::new(self.mark,
-                        "while scanning a block scalar, found a tab character where an intendation space is expected"));
+                        "while scanning a block scalar, found a tab character where an indentation space is expected"));
             }
 
             if !is_break(self.ch()) {
@@ -1384,7 +1384,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                             for i in 0..code_length {
                                 if !is_hex(self.buffer[i]) {
                                     return Err(ScanError::new(start_mark,
-                                        "while parsing a quoted scalar, did not find expected hexdecimal number"));
+                                        "while parsing a quoted scalar, did not find expected hexadecimal number"));
                                 }
                                 value = (value << 4) + as_hex(self.buffer[i]);
                             }
@@ -1589,7 +1589,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 self.lookahead(1);
             }
 
-            // check intendation level
+            // check indentation level
             if self.flow_level == 0 && (self.mark.col as isize) < indent {
                 break;
             }
@@ -1608,7 +1608,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn fetch_key(&mut self) -> ScanResult {
         let start_mark = self.mark;
         if self.flow_level == 0 {
-            // Check if we are allowed to start a new key (not nessesary simple).
+            // Check if we are allowed to start a new key (not necessarily simple).
             if !self.simple_key_allowed {
                 return Err(ScanError::new(
                     self.mark,

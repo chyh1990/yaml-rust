@@ -349,7 +349,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             | Token(_, TokenType::TagDirective(..))
             | Token(_, TokenType::DocumentStart) => {
                 // explicit document
-                self._explict_document_start()
+                self._explicit_document_start()
             }
             Token(mark, _) if implicit => {
                 self.parser_process_directives()?;
@@ -359,7 +359,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             }
             _ => {
                 // explicit document
-                self._explict_document_start()
+                self._explicit_document_start()
             }
         }
     }
@@ -385,7 +385,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         Ok(())
     }
 
-    fn _explict_document_start(&mut self) -> ParseResult {
+    fn _explicit_document_start(&mut self) -> ParseResult {
         self.parser_process_directives()?;
         match *self.peek_token()? {
             Token(mark, TokenType::DocumentStart) => {
@@ -433,7 +433,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn register_anchor(&mut self, name: String, _: &Marker) -> Result<usize, ScanError> {
-        // anchors can be overrided/reused
+        // anchors can be overridden/reused
         // if self.anchors.contains_key(name) {
         //     return Err(ScanError::new(*mark,
         //         "while parsing anchor, found duplicated anchor"));
@@ -704,7 +704,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             Token(mark, _) if !first => {
                 return Err(ScanError::new(
                     mark,
-                    "while parsing a flow sequence, expectd ',' or ']'",
+                    "while parsing a flow sequence, expected ',' or ']'",
                 ));
             }
             _ => { /* next */ }
