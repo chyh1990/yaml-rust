@@ -14,3 +14,4 @@ linked-hash-map = ">=0.0.9, <0.6"
 
 [dev-dependencies]
 quickcheck = "0.7"
+cfg-if = "<0.1.10" # to fix Rust 1.28 support
