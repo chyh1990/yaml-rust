@@ -9,8 +9,8 @@ matrix:
     - rust: nightly
       env: CLIPPY
       script: |
-          rustup toolchain install nightly -c clippy
-          cargo clippy -- -Dclippy
+          rustup toolchain install nightly --allow-downgrade --component clippy
+          cargo clippy -- -Dclippy 
 
 script:
   - cargo build
