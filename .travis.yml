@@ -9,7 +9,7 @@ matrix:
     - rust: nightly
       env: CLIPPY
       script: |
-          rustup component add clippy-preview || cargo install --git https://github.com/rust-lang/rust-clippy/ --force clippy
+          rustup toolchain install nightly -c clippy
           cargo clippy -- -Dclippy
 
 script:
