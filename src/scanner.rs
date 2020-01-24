@@ -1344,6 +1344,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     '\\' if !single => {
                         let mut code_length = 0usize;
                         match self.buffer[1] {
+                            '/' => string.push('/'),
                             '0' => string.push('\0'),
                             'a' => string.push('\x07'),
                             'b' => string.push('\x08'),
