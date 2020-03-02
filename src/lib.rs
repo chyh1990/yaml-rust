@@ -117,5 +117,4 @@ key1:a2
         assert!(YamlLoader::load_from_str(s).is_err());
         assert!(try_fail(s).is_err());
     }
-
 }
