@@ -67,6 +67,7 @@ fn parse_f64(v: &str) -> Option<f64> {
 /// Main structure for quickly parsing YAML.
 ///
 /// See [`YamlLoader::load_from_str`].
+#[derive(Default)]
 pub struct YamlLoader {
     docs: Vec<Yaml>,
     // states
@@ -161,6 +162,19 @@ impl MarkedEventReceiver for YamlLoader {
     }
 }
 
+#[derive(Debug)]
+pub enum LoadError {
+    IO(std::io::Error),
+    Scan(ScanError),
+    Decode(std::borrow::Cow<'static, str>),
+}
+
+impl From<std::io::Error> for LoadError {
+    fn from(error: std::io::Error) -> Self {
+        LoadError::IO(error)
+    }
+}
+
 impl YamlLoader {
     fn insert_new_node(&mut self, node: (Yaml, usize)) {
         // valid anchor id starts from 1
@@ -205,16 +219,47 @@ impl YamlLoader {
     /// if all documents are parsed successfully. An error in a latter document prevents the former
     /// from being returned.
     pub fn load_from_iter<I: Iterator<Item = char>>(source: I) -> Result<Vec<Yaml>, ScanError> {
-        let mut loader = YamlLoader {
-            docs: Vec::new(),
-            doc_stack: Vec::new(),
-            key_stack: Vec::new(),
-            anchor_map: BTreeMap::new(),
-        };
+        let mut loader = YamlLoader::default();
         let mut parser = Parser::new(source);
         parser.load(&mut loader, true)?;
         Ok(loader.docs)
     }
+
+    pub fn load_from_bytes(mut source: impl std::io::Read) -> Result<Vec<Yaml>, LoadError> {
+        let mut buffer = Vec::new();
+        source.read_to_end(&mut buffer)?;
+
+        // Decodes the input buffer using either UTF-8, UTF-16LE or UTF-16BE depending on the BOM codepoint.
+        // If the buffer doesn't start with a BOM codepoint, it will use a fallback encoding obtained by
+        // detect_utf16_endianness.
+        let (res, _) = encoding::types::decode(
+            &buffer,
+            encoding::DecoderTrap::Strict,
+            detect_utf16_endianness(&buffer),
+        );
+        let s = res.map_err(LoadError::Decode)?;
+        YamlLoader::load_from_str(&s).map_err(LoadError::Scan)
+    }
+}
+
+/// The encoding crate knows how to tell apart UTF-8 from UTF-16LE and utf-16BE, when the
+/// bytestream starts with BOM codepoint.
+/// However, it doesn't even attempt to guess the UTF-16 endianness of the input bytestream since
+/// in the general case the bytestream could start with a codepoint that uses both bytes.
+///
+/// The YAML-1.2 spec mandates that the first character of a YAML document is an ASCII character.
+/// This allows the encoding to be deduced by the pattern of null (#x00) characters.
+//
+/// See spec at <https://yaml.org/spec/1.2/spec.html#id2771184>
+fn detect_utf16_endianness(b: &[u8]) -> encoding::types::EncodingRef {
+    if b.len() > 1 && (b[0] != b[1]) {
+        if b[0] == 0 {
+            return encoding::all::UTF_16BE;
+        } else if b[1] == 0 {
+            return encoding::all::UTF_16LE;
+        }
+    }
+    encoding::all::UTF_8
 }
 
 macro_rules! define_as (
@@ -408,5 +453,73 @@ impl Iterator for YamlIter {
 
     fn next(&mut self) -> Option<Yaml> {
         self.yaml.next()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::YamlLoader;
+
+    #[test]
+    fn test_read_bom() {
+        let s = b"\xef\xbb\xbf---
+a: 1
+b: 2.2
+c: [1, 2]
+";
+        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let doc = &out[0];
+        assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
+        assert!((doc["b"].as_f64().unwrap() - 2.2f64).abs() <= f64::EPSILON);
+        assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
+        assert!(doc["d"][0].is_badvalue());
+    }
+
+    #[test]
+    fn test_read_utf16le() {
+        let s = b"\xff\xfe-\x00-\x00-\x00
+\x00a\x00:\x00 \x001\x00
+\x00b\x00:\x00 \x002\x00.\x002\x00
+\x00c\x00:\x00 \x00[\x001\x00,\x00 \x002\x00]\x00
+\x00";
+        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let doc = &out[0];
+        println!("GOT: {doc:?}");
+        assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
+        assert!((doc["b"].as_f64().unwrap() - 2.2f64) <= f64::EPSILON);
+        assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
+        assert!(doc["d"][0].is_badvalue());
+    }
+
+    #[test]
+    fn test_read_utf16be() {
+        let s = b"\xfe\xff\x00-\x00-\x00-\x00
+\x00a\x00:\x00 \x001\x00
+\x00b\x00:\x00 \x002\x00.\x002\x00
+\x00c\x00:\x00 \x00[\x001\x00,\x00 \x002\x00]\x00
+";
+        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let doc = &out[0];
+        println!("GOT: {doc:?}");
+        assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
+        assert!((doc["b"].as_f64().unwrap() - 2.2f64).abs() <= f64::EPSILON);
+        assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
+        assert!(doc["d"][0].is_badvalue());
+    }
+
+    #[test]
+    fn test_read_utf16le_nobom() {
+        let s = b"-\x00-\x00-\x00
+\x00a\x00:\x00 \x001\x00
+\x00b\x00:\x00 \x002\x00.\x002\x00
+\x00c\x00:\x00 \x00[\x001\x00,\x00 \x002\x00]\x00
+\x00";
+        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let doc = &out[0];
+        println!("GOT: {doc:?}");
+        assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
+        assert!((doc["b"].as_f64().unwrap() - 2.2f64).abs() <= f64::EPSILON);
+        assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
+        assert!(doc["d"][0].is_badvalue());
     }
 }
