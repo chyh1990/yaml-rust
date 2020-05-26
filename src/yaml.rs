@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, convert::TryFrom, mem, ops::Index};
 
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 
 use crate::parser::{Event, MarkedEventReceiver, Parser, Tag};
 use crate::scanner::{Marker, ScanError, TScalarStyle};

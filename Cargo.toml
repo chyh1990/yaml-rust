@@ -15,7 +15,7 @@ edition = "2021"
 
 [dependencies]
 arraydeque = "0.5.1"
-linked-hash-map = "0.5.3"
+hashlink = "0.8"
 
 [dev-dependencies]
 libtest-mimic = "0.3.0"

@@ -43,7 +43,7 @@
     )
 )]
 
-extern crate linked_hash_map;
+extern crate hashlink;
 
 pub(crate) mod char_traits;
 #[macro_use]
