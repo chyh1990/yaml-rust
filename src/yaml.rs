@@ -1,4 +1,4 @@
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use parser::*;
 use scanner::{Marker, ScanError, TScalarStyle, TokenType};
 use std::collections::BTreeMap;
