@@ -10,13 +10,6 @@ pub enum EmitError {
 }
 
 impl Error for EmitError {
-    fn description(&self) -> &str {
-        match *self {
-            EmitError::FmtError(ref err) => err.description(),
-            EmitError::BadHashmapKey => "bad hashmap key",
-        }
-    }
-
     fn cause(&self) -> Option<&dyn Error> {
         None
     }
