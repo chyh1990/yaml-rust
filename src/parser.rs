@@ -1,4 +1,4 @@
-use scanner::*;
+use crate::scanner::*;
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
