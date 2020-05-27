@@ -10,26 +10,22 @@ environment:
   matrix:
     - channel: stable
       target: i686-pc-windows-msvc
+      type: msvc
     - channel: stable
       target: x86_64-pc-windows-msvc
+      type: msvc
     - channel: stable
       target: i686-pc-windows-gnu
+      type: gnu
     - channel: stable
       target: x86_64-pc-windows-gnu
-    - channel: beta
-      target: i686-pc-windows-msvc
-    - channel: beta
-      target: x86_64-pc-windows-msvc
+      type: gnu
     - channel: nightly
       target: i686-pc-windows-msvc
       type: msvc
     - channel: nightly
       target: x86_64-pc-windows-msvc
       type: msvc
-    - channel: beta
-      target: i686-pc-windows-gnu
-    - channel: beta
-      target: x86_64-pc-windows-gnu
     - channel: nightly
       target: i686-pc-windows-gnu
       type: gnu
