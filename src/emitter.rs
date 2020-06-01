@@ -1,7 +1,7 @@
 use std::convert::From;
 use std::error::Error;
 use std::fmt::{self, Display};
-use yaml::{Hash, Yaml};
+use crate::yaml::{Hash, Yaml};
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
@@ -10,14 +10,7 @@ pub enum EmitError {
 }
 
 impl Error for EmitError {
-    fn description(&self) -> &str {
-        match *self {
-            EmitError::FmtError(ref err) => err.description(),
-            EmitError::BadHashmapKey => "bad hashmap key",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         None
     }
 }
@@ -38,7 +31,7 @@ impl From<fmt::Error> for EmitError {
 }
 
 pub struct YamlEmitter<'a> {
-    writer: &'a mut fmt::Write,
+    writer: &'a mut dyn fmt::Write,
     best_indent: usize,
     compact: bool,
 
@@ -48,7 +41,7 @@ pub struct YamlEmitter<'a> {
 pub type EmitResult = Result<(), EmitError>;
 
 // from serialize::json
-fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
+fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
     wr.write_str("\"")?;
 
     let mut start = 0;
@@ -111,7 +104,7 @@ fn escape_str(wr: &mut fmt::Write, v: &str) -> Result<(), fmt::Error> {
 }
 
 impl<'a> YamlEmitter<'a> {
-    pub fn new(writer: &'a mut fmt::Write) -> YamlEmitter {
+    pub fn new(writer: &'a mut dyn fmt::Write) -> YamlEmitter {
         YamlEmitter {
             writer,
             best_indent: 2,
@@ -316,12 +309,12 @@ fn need_quotes(string: &str) -> bool {
             | '\"'
             | '\''
             | '\\'
-            | '\0'...'\x06'
+            | '\0'..='\x06'
             | '\t'
             | '\n'
             | '\r'
-            | '\x0e'...'\x1a'
-            | '\x1c'...'\x1f' => true,
+            | '\x0e'..='\x1a'
+            | '\x1c'..='\x1f' => true,
             _ => false,
         })
         || [
@@ -344,7 +337,7 @@ fn need_quotes(string: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use YamlLoader;
+    use crate::YamlLoader;
 
     #[test]
     fn test_emit_simple() {
