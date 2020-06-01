@@ -238,7 +238,7 @@ impl<'a> YamlEmitter<'a> {
 
     /// Emit a yaml as a hash or array value: i.e., which should appear
     /// following a ":" or "-", either after a space, or on a new line.
-    /// If `inline` is true, then the preceeding characters are distinct
+    /// If `inline` is true, then the preceding characters are distinct
     /// and short enough to respect the compact flag.
     fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
         match *val {
@@ -320,7 +320,7 @@ fn need_quotes(string: &str) -> bool {
         || [
             // http://yaml.org/type/bool.html
             // Note: 'y', 'Y', 'n', 'N', is not quoted deliberately, as in libyaml. PyYAML also parse
-            // them as string, not booleans, although it is volating the YAML 1.1 specification.
+            // them as string, not booleans, although it is violating the YAML 1.1 specification.
             // See https://github.com/dtolnay/serde-yaml/pull/83#discussion_r152628088.
             "yes", "Yes", "YES", "no", "No", "NO", "True", "TRUE", "true", "False", "FALSE",
             "false", "on", "On", "ON", "off", "Off", "OFF",
