@@ -288,19 +288,19 @@ impl Yaml {
     // This function falls back to Yaml::String if nothing else matches.
     pub fn from_str(v: &str) -> Yaml {
         if v.starts_with("0x") {
-            let n = i64::from_str_radix(&v[2..], 16);
-            if n.is_ok() {
-                return Yaml::Integer(n.unwrap());
+            if let Ok(i) = i64::from_str_radix(&v[2..], 16) {
+                return Yaml::Integer(i);
             }
         }
         if v.starts_with("0o") {
-            let n = i64::from_str_radix(&v[2..], 8);
-            if n.is_ok() {
-                return Yaml::Integer(n.unwrap());
+            if let Ok(i) = i64::from_str_radix(&v[2..], 8) {
+                return Yaml::Integer(i);
             }
         }
-        if v.starts_with('+') && v[1..].parse::<i64>().is_ok() {
-            return Yaml::Integer(v[1..].parse::<i64>().unwrap());
+        if v.starts_with('+') {
+            if let Ok(i) = v[1..].parse::<i64>() {
+                return Yaml::Integer(i);
+            }
         }
         match v {
             "~" | "null" => Yaml::Null,

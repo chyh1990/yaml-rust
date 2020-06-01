@@ -5,7 +5,7 @@ matrix:
     - rust: stable
     - rust: beta
     - rust: nightly
-    - rust: 1.31.0
+    - rust: 1.33.0
     - rust: nightly
       env: CLIPPY
       script: |
