@@ -224,19 +224,51 @@ impl YamlLoader {
         parser.load(&mut loader, true)?;
         Ok(loader.docs)
     }
+}
 
-    pub fn load_from_bytes(mut source: impl std::io::Read) -> Result<Vec<Yaml>, LoadError> {
+/// YamlDecoder is a YamlLoader builder that allows you to supply your own encoding error trap.
+/// For example, to read a YAML file while ignoring Unicode decoding errors you can set the
+/// `encoding_trap` to `encoding::DecoderTrap::Ignore`.
+/// ```rust
+/// use yaml_rust2::yaml::YamlDecoder;
+///
+/// let string = b"---
+/// a\xa9: 1
+/// b: 2.2
+/// c: [1, 2]
+/// ";
+/// let out = YamlDecoder::read(string as &[u8])
+///     .encoding_trap(encoding::DecoderTrap::Ignore)
+///     .decode()
+///     .unwrap();
+/// ```
+pub struct YamlDecoder<T: std::io::Read> {
+    source: T,
+    trap: encoding::types::DecoderTrap,
+}
+
+impl<T: std::io::Read> YamlDecoder<T> {
+    pub fn read(source: T) -> YamlDecoder<T> {
+        YamlDecoder {
+            source,
+            trap: encoding::DecoderTrap::Strict,
+        }
+    }
+
+    pub fn encoding_trap(&mut self, trap: encoding::types::DecoderTrap) -> &mut Self {
+        self.trap = trap;
+        self
+    }
+
+    pub fn decode(&mut self) -> Result<Vec<Yaml>, LoadError> {
         let mut buffer = Vec::new();
-        source.read_to_end(&mut buffer)?;
+        self.source.read_to_end(&mut buffer)?;
 
         // Decodes the input buffer using either UTF-8, UTF-16LE or UTF-16BE depending on the BOM codepoint.
         // If the buffer doesn't start with a BOM codepoint, it will use a fallback encoding obtained by
         // detect_utf16_endianness.
-        let (res, _) = encoding::types::decode(
-            &buffer,
-            encoding::DecoderTrap::Strict,
-            detect_utf16_endianness(&buffer),
-        );
+        let (res, _) =
+            encoding::types::decode(&buffer, self.trap, detect_utf16_endianness(&buffer));
         let s = res.map_err(LoadError::Decode)?;
         YamlLoader::load_from_str(&s).map_err(LoadError::Scan)
     }
@@ -458,7 +490,7 @@ impl Iterator for YamlIter {
 
 #[cfg(test)]
 mod test {
-    use crate::YamlLoader;
+    use super::YamlDecoder;
 
     #[test]
     fn test_read_bom() {
@@ -467,7 +499,7 @@ a: 1
 b: 2.2
 c: [1, 2]
 ";
-        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let out = YamlDecoder::read(s as &[u8]).decode().unwrap();
         let doc = &out[0];
         assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
         assert!((doc["b"].as_f64().unwrap() - 2.2f64).abs() <= f64::EPSILON);
@@ -482,7 +514,7 @@ c: [1, 2]
 \x00b\x00:\x00 \x002\x00.\x002\x00
 \x00c\x00:\x00 \x00[\x001\x00,\x00 \x002\x00]\x00
 \x00";
-        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let out = YamlDecoder::read(s as &[u8]).decode().unwrap();
         let doc = &out[0];
         println!("GOT: {doc:?}");
         assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
@@ -498,7 +530,7 @@ c: [1, 2]
 \x00b\x00:\x00 \x002\x00.\x002\x00
 \x00c\x00:\x00 \x00[\x001\x00,\x00 \x002\x00]\x00
 ";
-        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let out = YamlDecoder::read(s as &[u8]).decode().unwrap();
         let doc = &out[0];
         println!("GOT: {doc:?}");
         assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
@@ -514,7 +546,26 @@ c: [1, 2]
 \x00b\x00:\x00 \x002\x00.\x002\x00
 \x00c\x00:\x00 \x00[\x001\x00,\x00 \x002\x00]\x00
 \x00";
-        let out = YamlLoader::load_from_bytes(s as &[u8]).unwrap();
+        let out = YamlDecoder::read(s as &[u8]).decode().unwrap();
+        let doc = &out[0];
+        println!("GOT: {doc:?}");
+        assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
+        assert!((doc["b"].as_f64().unwrap() - 2.2f64).abs() <= f64::EPSILON);
+        assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
+        assert!(doc["d"][0].is_badvalue());
+    }
+
+    #[test]
+    fn test_read_trap() {
+        let s = b"---
+a\xa9: 1
+b: 2.2
+c: [1, 2]
+";
+        let out = YamlDecoder::read(s as &[u8])
+            .encoding_trap(encoding::DecoderTrap::Ignore)
+            .decode()
+            .unwrap();
         let doc = &out[0];
         println!("GOT: {doc:?}");
         assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
