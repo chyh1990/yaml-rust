@@ -9,8 +9,8 @@
 //! used by adding `yaml-rust` to the dependencies in your project's `Cargo.toml`.
 //!
 //! ```toml
-//! [dependencies.yaml-rust]
-//! git = "https://github.com/chyh1990/yaml-rust.git"
+//! [dependencies]
+//! yaml-rust = "0.4"
 //! ```
 //!
 //! And this in your crate root:
