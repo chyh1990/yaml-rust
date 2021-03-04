@@ -1,4 +1,4 @@
-use linked_hash_map::LinkedHashMap;
+use ritelinked::LinkedHashMap;
 use crate::parser::*;
 use crate::scanner::{Marker, ScanError, TScalarStyle, TokenType};
 use std::collections::BTreeMap;

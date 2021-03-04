@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! [dependencies.yaml-rust]
-//! git = "https://github.com/chyh1990/yaml-rust.git"
+//! yaml-rust = "0.4"
 //! ```
 //!
 //! And this in your crate root:
@@ -44,7 +44,7 @@
     allow(match_same_arms, should_implement_trait)
 )]
 
-extern crate linked_hash_map;
+extern crate ritelinked;
 
 pub mod emitter;
 pub mod parser;
