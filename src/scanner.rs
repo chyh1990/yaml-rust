@@ -15,7 +15,7 @@ pub enum TScalarStyle {
     DoubleQuoted,
 
     Literal,
-    Foled,
+    Folded,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
@@ -1211,7 +1211,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         } else {
             Ok(Token(
                 start_mark,
-                TokenType::Scalar(TScalarStyle::Foled, string),
+                TokenType::Scalar(TScalarStyle::Folded, string),
             ))
         }
     }
