@@ -1,0 +1,31 @@
+name: build commits
+on: push
+jobs:
+  checkout-build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: [nightly, stable, 1.45.0]
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: setup rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{matrix.toolchain}}
+        override: true
+        components: rustfmt, clippy
+    - name: build
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: test
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+    - if: matrix.toolchain == 'stable'
+      name: clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --all -- -D warnings
