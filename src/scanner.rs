@@ -194,19 +194,15 @@ fn is_blankz(c: char) -> bool {
 }
 #[inline]
 fn is_digit(c: char) -> bool {
-    c >= '0' && c <= '9'
+    ('0'..='9').contains(&c)
 }
 #[inline]
 fn is_alpha(c: char) -> bool {
-    match c {
-        '0'..='9' | 'a'..='z' | 'A'..='Z' => true,
-        '_' | '-' => true,
-        _ => false,
-    }
+    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | '_' | '-')
 }
 #[inline]
 fn is_hex(c: char) -> bool {
-    (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+    ('0'..='9').contains(&c) || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
 }
 #[inline]
 fn as_hex(c: char) -> u32 {
@@ -219,10 +215,7 @@ fn as_hex(c: char) -> u32 {
 }
 #[inline]
 fn is_flow(c: char) -> bool {
-    match c {
-        ',' | '[' | ']' | '{' | '}' => true,
-        _ => false,
-    }
+    matches!(c, ',' | '[' | ']' | '{' | '}')
 }
 
 pub type ScanResult = Result<(), ScanError>;
@@ -251,10 +244,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
     #[inline]
     pub fn get_error(&self) -> Option<ScanError> {
-        match self.error {
-            None => None,
-            Some(ref e) => Some(e.clone()),
-        }
+        self.error.as_ref().cloned()
     }
 
     #[inline]
