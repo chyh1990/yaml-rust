@@ -100,6 +100,8 @@ const EX5_11 : &'static str =
 const EX5_12 : &'static str =
     "# Tabs and spaces\nquoted: \"Quoted\t\"\nblock:	|\n  void main() {\n  \tprintf(\"Hello, world!\\n\");\n  }";
 
+const NS_ESC_SLASH: &'static str = "\"\\/\"";
+
 const EX5_13 : &'static str =
     "\"Fun with \\\\\n\\\" \\a \\b \\e \\f \\\n\\n \\r \\t \\v \\0 \\\n\\  \\_ \\N \\L \\P \\\n\\x41 \\u0041 \\U00000041\"";
 
