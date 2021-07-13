@@ -63,3 +63,15 @@ fn test_issue133() {
     assert_eq!(doc, doc2); // This failed because the type has changed to a number now
 
 }
+
+#[test]
+fn test_newline() {
+    let y = Yaml::Array(vec![Yaml::String("\n".to_owned())]);
+    test_round_trip(&y);
+}
+
+#[test]
+fn test_crlf() {
+    let y = Yaml::Array(vec![Yaml::String("\r\n".to_owned())]);
+    test_round_trip(&y);
+}
