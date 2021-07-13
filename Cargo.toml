@@ -12,6 +12,7 @@ edition = "2018"
 
 [dependencies]
 linked-hash-map = "0.5.3"
+encoding = "0.2"
 
 [dev-dependencies]
 quickcheck = "0.9"
