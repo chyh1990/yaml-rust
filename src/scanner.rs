@@ -414,9 +414,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             '>' if self.flow_level == 0 => self.fetch_block_scalar(false),
             '\'' => self.fetch_flow_scalar(true),
             '"' => self.fetch_flow_scalar(false),
-            // plain scalar
-            '-' if !is_blankz(nc) => self.fetch_plain_scalar(),
-            ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => self.fetch_plain_scalar(),
+            // plain scalar - !is_blankz(nc)
+            '-' => self.fetch_plain_scalar(),
+            ':' | '?' if self.flow_level == 0 => self.fetch_plain_scalar(),
             '%' | '@' | '`' => Err(ScanError::new(
                 self.mark,
                 &format!("unexpected character: `{}'", c),
