@@ -1,3 +1,12 @@
+/*
+ * Copyright 2015 Yuheng Chen
+ * Copyright 2021 Genomics plc
+ *
+ * Please refer to the `README.md` and license files (`LICENSE-APACHE` and
+ * `LICENSE-MIT`) at the top-level of this repository for details on licensing.
+ *
+ */
+
 use linked_hash_map::LinkedHashMap;
 use crate::parser::*;
 use crate::scanner::{Marker, ScanError, TScalarStyle, TokenType};
@@ -44,6 +53,8 @@ pub enum Yaml {
     Hash(self::Hash),
     /// Alias, not fully supported yet.
     Alias(usize),
+    /// Yaml node with block or line comments
+    CommentedYaml(self::CommentedYaml),
     /// YAML null, e.g. `null` or `~`.
     Null,
     /// Accessing a nonexistent node via the Index trait returns `BadValue`. This
@@ -54,6 +65,42 @@ pub enum Yaml {
 
 pub type Array = Vec<Yaml>;
 pub type Hash = LinkedHashMap<Yaml, Yaml>;
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
+pub struct CommentedYaml(pub Box<Yaml>, pub Comments);
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
+pub struct Comments {
+    /// A before comment is a vector of strinsg representing the text from full
+    /// length comment lines that come before a node but are separated from the
+    /// node by one or more lines of (non-comment) whitespace. If there are no
+    /// comment lines preceding the node but set off from it in this way, or if
+    /// such a comment is the tail comment for another node, then before will
+    /// be an empty vector.
+    pub before: Vec<string::String>,
+    /// A head comment is a vector of strings representing the text from full
+    /// length comment lines that directly precede a node (i.e. the line
+    /// immediately preceding the node contains no node, only a comment). If
+    /// there is no such comment, head is an empty vector.
+    pub head: Vec<string::String>,
+    /// A line comment is a string representing the text from a comment that is
+    /// on the same line as the node. If there is no such comment, line is None.
+    pub line: Option<string::String>,
+    /// A tail comment is a vector of strings representing the text from full
+    /// length comment lines that directly follow a node (i.e. the line
+    /// immediately following the node contains no node, only a comment). If
+    /// there is no such comment, tail is an empty vector.
+    pub tail: Vec<string::String>,
+    /// An after comment is a vector of strings representing the text from full
+    /// length comment lines that come after a node but are separated from the
+    /// node by one or more lines of whitespace. However, note that if there is
+    /// a node following such a comment, the comment will be attached to the
+    /// following node as a before comment rather than to the preceding node as
+    /// an after comment. If there are no comment lines following the node but
+    /// set off from it and not followed by another node, then after is an empty
+    /// vector.
+    pub after: Vec<string::String>,
+}
 
 // parse f64 as Core schema
 // See: https://github.com/chyh1990/yaml-rust/issues/51
