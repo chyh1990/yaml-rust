@@ -77,10 +77,11 @@ impl fmt::Display for ScanError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(
             formatter,
-            "{} at line {} column {}",
+            "{} at line {} column {}, i.e. byte index {}",
             self.info,
             self.mark.line,
-            self.mark.col + 1
+            self.mark.col + 1,
+            self.mark.index,
         )
     }
 }
