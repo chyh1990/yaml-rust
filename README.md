@@ -1,5 +1,7 @@
 # yaml-rust fork
 
+[![yaml-rust build](https://github.com/curvelogic/yaml-rust/actions/workflows/build.yaml/badge.svg)](https://github.com/curvelogic/yaml-rust/actions/workflows/build.yaml)
+
 This begins as a fork chyh1990/yaml-rust which is essentially unmaintained.
 
 # yaml-rust
