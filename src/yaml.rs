@@ -1,6 +1,6 @@
-use linked_hash_map::LinkedHashMap;
 use crate::parser::*;
 use crate::scanner::{Marker, ScanError, TScalarStyle, TokenType};
+use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
 use std::f64;
 use std::i64;
@@ -247,24 +247,15 @@ impl Yaml {
     define_into!(into_vec, Array, Array);
 
     pub fn is_null(&self) -> bool {
-        match *self {
-            Yaml::Null => true,
-            _ => false,
-        }
+        matches!(*self, Yaml::Null)
     }
 
     pub fn is_badvalue(&self) -> bool {
-        match *self {
-            Yaml::BadValue => true,
-            _ => false,
-        }
+        matches!(*self, Yaml::BadValue)
     }
 
     pub fn is_array(&self) -> bool {
-        match *self {
-            Yaml::Array(_) => true,
-            _ => false,
-        }
+        matches!(*self, Yaml::Array(_))
     }
 
     pub fn as_f64(&self) -> Option<f64> {
@@ -287,18 +278,18 @@ impl Yaml {
     // Not implementing FromStr because there is no possibility of Error.
     // This function falls back to Yaml::String if nothing else matches.
     pub fn from_str(v: &str) -> Yaml {
-        if v.starts_with("0x") {
-            if let Ok(i) = i64::from_str_radix(&v[2..], 16) {
+        if let Some(stripped) = v.strip_prefix("0x") {
+            if let Ok(i) = i64::from_str_radix(stripped, 16) {
                 return Yaml::Integer(i);
             }
         }
-        if v.starts_with("0o") {
-            if let Ok(i) = i64::from_str_radix(&v[2..], 8) {
+        if let Some(stripped) = v.strip_prefix("0o") {
+            if let Ok(i) = i64::from_str_radix(stripped, 8) {
                 return Yaml::Integer(i);
             }
         }
-        if v.starts_with('+') {
-            if let Ok(i) = v[1..].parse::<i64>() {
+        if let Some(stripped) = v.strip_prefix('+') {
+            if let Ok(i) = stripped.parse::<i64>() {
                 return Yaml::Integer(i);
             }
         }
@@ -367,8 +358,8 @@ impl Iterator for YamlIter {
 
 #[cfg(test)]
 mod test {
-    use std::f64;
     use crate::yaml::*;
+    use std::f64;
     #[test]
     fn test_coerce() {
         let s = "---

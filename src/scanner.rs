@@ -194,19 +194,15 @@ fn is_blankz(c: char) -> bool {
 }
 #[inline]
 fn is_digit(c: char) -> bool {
-    c >= '0' && c <= '9'
+    ('0'..='9').contains(&c)
 }
 #[inline]
 fn is_alpha(c: char) -> bool {
-    match c {
-        '0'..='9' | 'a'..='z' | 'A'..='Z' => true,
-        '_' | '-' => true,
-        _ => false,
-    }
+    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | '_' | '-')
 }
 #[inline]
 fn is_hex(c: char) -> bool {
-    (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+    ('0'..='9').contains(&c) || ('a'..='f').contains(&c) | ('A'..='F').contains(&c)
 }
 #[inline]
 fn as_hex(c: char) -> u32 {
@@ -219,10 +215,7 @@ fn as_hex(c: char) -> u32 {
 }
 #[inline]
 fn is_flow(c: char) -> bool {
-    match c {
-        ',' | '[' | ']' | '{' | '}' => true,
-        _ => false,
-    }
+    matches!(c, ',' | '[' | ']' | '{' | '}')
 }
 
 pub type ScanResult = Result<(), ScanError>;
@@ -251,10 +244,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
     #[inline]
     pub fn get_error(&self) -> Option<ScanError> {
-        match self.error {
-            None => None,
-            Some(ref e) => Some(e.clone()),
-        }
+        self.error.as_ref().cloned()
     }
 
     #[inline]
@@ -1176,11 +1166,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 if trailing_breaks.is_empty() {
                     string.push(' ');
                 }
-                leading_break.clear();
             } else {
                 string.push_str(&leading_break);
-                leading_break.clear();
             }
+            leading_break.clear();
 
             string.push_str(&trailing_breaks);
             trailing_breaks.clear();
@@ -1421,12 +1410,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             while is_blank(self.ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
                     // Consume a space or a tab character.
-                    if leading_blanks {
-                        self.skip();
-                    } else {
+                    if !leading_blanks {
                         whitespaces.push(self.ch());
-                        self.skip();
                     }
+                    self.skip();
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break.
@@ -1446,16 +1433,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     string.push_str(&leading_break);
                     string.push_str(&trailing_breaks);
                     trailing_breaks.clear();
-                    leading_break.clear();
+                } else if trailing_breaks.is_empty() {
+                    string.push(' ');
                 } else {
-                    if trailing_breaks.is_empty() {
-                        string.push(' ');
-                    } else {
-                        string.push_str(&trailing_breaks);
-                        trailing_breaks.clear();
-                    }
-                    leading_break.clear();
+                    string.push_str(&trailing_breaks);
+                    trailing_breaks.clear();
                 }
+                leading_break.clear();
             } else {
                 string.push_str(&whitespaces);
                 whitespaces.clear();
@@ -1533,16 +1517,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                             string.push_str(&leading_break);
                             string.push_str(&trailing_breaks);
                             trailing_breaks.clear();
-                            leading_break.clear();
+                        } else if trailing_breaks.is_empty() {
+                            string.push(' ');
                         } else {
-                            if trailing_breaks.is_empty() {
-                                string.push(' ');
-                            } else {
-                                string.push_str(&trailing_breaks);
-                                trailing_breaks.clear();
-                            }
-                            leading_break.clear();
+                            string.push_str(&trailing_breaks);
+                            trailing_breaks.clear();
                         }
+                        leading_break.clear();
                         leading_blanks = false;
                     } else {
                         string.push_str(&whitespaces);
@@ -1569,12 +1550,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         ));
                     }
 
-                    if leading_blanks {
-                        self.skip();
-                    } else {
+                    if !leading_blanks {
                         whitespaces.push(self.ch());
-                        self.skip();
                     }
+                    self.skip();
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break

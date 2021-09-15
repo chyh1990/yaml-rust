@@ -1,11 +1,10 @@
+# yaml-rust fork
+
+This begins as a fork chyh1990/yaml-rust which is essentially unmaintained.
+
 # yaml-rust
 
 The missing YAML 1.2 implementation for Rust.
-
-[![Travis](https://travis-ci.org/chyh1990/yaml-rust.svg?branch=master)](https://travis-ci.org/chyh1990/yaml-rust)
-[![AppVeyor](https://ci.appveyor.com/api/projects/status/scf47535ckp4ylg4?svg=true)](https://ci.appveyor.com/project/chyh1990/yaml-rust)
-[![crates.io](https://img.shields.io/crates/v/yaml-rust.svg)](https://crates.io/crates/yaml-rust)
-[![docs.rs](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/yaml-rust)
 
 `yaml-rust` is a pure Rust YAML 1.2 implementation,
 which enjoys the memory safety
