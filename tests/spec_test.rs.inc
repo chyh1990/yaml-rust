@@ -633,6 +633,14 @@ fn test_ex5_12_tabs_and_spaces() {
 }
 
 #[test]
+fn test_escaped_slash() {
+    let mut v = str_to_test_events(NS_ESC_SLASH).into_iter();
+    assert_next!(v, TestEvent::OnDocumentStart);
+    assert_next!(v, TestEvent::OnScalar);
+    assert_next!(v, TestEvent::OnDocumentEnd);
+}
+
+#[test]
 fn test_ex5_13_escaped_characters() {
     let mut v = str_to_test_events(EX5_13).into_iter();
     assert_next!(v, TestEvent::OnDocumentStart);
