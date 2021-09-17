@@ -83,25 +83,25 @@ fn test_mapvec_legal() {
     // we can parse.
 
     let mut key = Array::new();
-    key.push(Yaml::Integer(1));
-    key.push(Yaml::Integer(2));
-    key.push(Yaml::Integer(3));
+    key.push(Yaml::Integer(None, 1));
+    key.push(Yaml::Integer(None, 2));
+    key.push(Yaml::Integer(None, 3));
 
     let mut keyhash = Hash::new();
-    keyhash.insert(Yaml::String("key".into()), Yaml::Array(key));
+    keyhash.insert(Yaml::String(None, "key".into()), Yaml::Array(None, key));
 
     let mut val = Array::new();
-    val.push(Yaml::Integer(4));
-    val.push(Yaml::Integer(5));
-    val.push(Yaml::Integer(6));
+    val.push(Yaml::Integer(None, 4));
+    val.push(Yaml::Integer(None, 5));
+    val.push(Yaml::Integer(None, 6));
 
     let mut hash = Hash::new();
-    hash.insert(Yaml::Hash(keyhash), Yaml::Array(val));
+    hash.insert(Yaml::Hash(None, keyhash), Yaml::Array(None, val));
 
     let mut out_str = String::new();
     {
         let mut emitter = YamlEmitter::new(&mut out_str);
-        emitter.dump(&Yaml::Hash(hash)).unwrap();
+        emitter.dump(&Yaml::Hash(None, hash)).unwrap();
     }
 
     // At this point, we are tempted to naively render like this:

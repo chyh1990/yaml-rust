@@ -41,7 +41,7 @@ pub struct YamlEmitter<'a> {
 pub type EmitResult = Result<(), EmitError>;
 
 // from serialize::json
-fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
+pub fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
     wr.write_str("\"")?;
 
     let mut start = 0;
@@ -150,10 +150,18 @@ impl<'a> YamlEmitter<'a> {
     }
 
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
+        if let Some(t) = node.tag() {
+            if node.is_complex() {
+                writeln!(self.writer, "{}", t.to_string())?;
+            } else {
+                write!(self.writer, "{} ", t.to_string())?;
+            }
+        }
+
         match *node {
-            Yaml::Array(ref v) => self.emit_array(v),
-            Yaml::Hash(ref h) => self.emit_hash(h),
-            Yaml::String(ref v) => {
+            Yaml::Array(_, ref v) => self.emit_array(v),
+            Yaml::Hash(_, ref h) => self.emit_hash(h),
+            Yaml::String(_, ref v) => {
                 if need_quotes(v) {
                     escape_str(self.writer, v)?;
                 } else {
@@ -161,7 +169,7 @@ impl<'a> YamlEmitter<'a> {
                 }
                 Ok(())
             }
-            Yaml::Boolean(v) => {
+            Yaml::Boolean(_, v) => {
                 if v {
                     self.writer.write_str("true")?;
                 } else {
@@ -169,15 +177,15 @@ impl<'a> YamlEmitter<'a> {
                 }
                 Ok(())
             }
-            Yaml::Integer(v) => {
+            Yaml::Integer(_, v) => {
                 write!(self.writer, "{}", v)?;
                 Ok(())
             }
-            Yaml::Real(ref v) => {
+            Yaml::Real(_, ref v) => {
                 write!(self.writer, "{}", v)?;
                 Ok(())
             }
-            Yaml::Null | Yaml::BadValue => {
+            Yaml::Null(_) | Yaml::BadValue => {
                 write!(self.writer, "~")?;
                 Ok(())
             }
@@ -210,7 +218,7 @@ impl<'a> YamlEmitter<'a> {
         } else {
             self.level += 1;
             for (cnt, (k, v)) in h.iter().enumerate() {
-                let complex_key = matches!(*k, Yaml::Hash(_) | Yaml::Array(_));
+                let complex_key = matches!(*k, Yaml::Hash(_, _) | Yaml::Array(_, _));
                 if cnt > 0 {
                     writeln!(self.writer)?;
                     self.write_indent()?;
@@ -239,10 +247,16 @@ impl<'a> YamlEmitter<'a> {
     /// and short enough to respect the compact flag.
     fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
         match *val {
-            Yaml::Array(ref v) => {
+            Yaml::Array(ref tag, ref v) => {
                 if (inline && self.compact) || v.is_empty() {
                     write!(self.writer, " ")?;
+                    if let Some(t) = tag {
+                        write!(self.writer, "{} ", t.to_string())?;
+                    }
                 } else {
+                    if let Some(t) = tag {
+                        write!(self.writer, " {}", t.to_string())?;
+                    }
                     writeln!(self.writer)?;
                     self.level += 1;
                     self.write_indent()?;
@@ -250,10 +264,16 @@ impl<'a> YamlEmitter<'a> {
                 }
                 self.emit_array(v)
             }
-            Yaml::Hash(ref h) => {
+            Yaml::Hash(ref tag, ref h) => {
                 if (inline && self.compact) || h.is_empty() {
                     write!(self.writer, " ")?;
+                    if let Some(t) = tag {
+                        write!(self.writer, "{} ", t.to_string())?;
+                    }
                 } else {
+                    if let Some(t) = tag {
+                        write!(self.writer, " {}", t.to_string())?;
+                    }
                     writeln!(self.writer)?;
                     self.level += 1;
                     self.write_indent()?;
@@ -283,7 +303,7 @@ impl<'a> YamlEmitter<'a> {
 /// * When the string is null or ~ (otherwise, it would be considered as a null value);
 /// * When the string looks like a number, such as integers (e.g. 2, 14, etc.), floats (e.g. 2.6, 14.9) and exponential numbers (e.g. 12e7, etc.) (otherwise, it would be treated as a numeric value);
 /// * When the string looks like a date (e.g. 2014-12-31) (otherwise it would be automatically converted into a Unix timestamp).
-fn need_quotes(string: &str) -> bool {
+pub fn need_quotes(string: &str) -> bool {
     fn need_quotes_spaces(string: &str) -> bool {
         string.starts_with(' ') || string.ends_with(' ')
     }
@@ -321,8 +341,10 @@ fn need_quotes(string: &str) -> bool {
 
 #[cfg(test)]
 mod test {
+    use linked_hash_map::LinkedHashMap;
+
     use super::*;
-    use crate::YamlLoader;
+    use crate::{yaml::Tag, YamlLoader};
 
     #[test]
     fn test_emit_simple() {
@@ -615,5 +637,78 @@ a:
         println!("emitted:\n{}", writer);
 
         assert_eq!(s, writer);
+    }
+
+    #[test]
+    fn test_basic_timestamp_tag() {
+        let timestamp = Yaml::String(
+            Some(Tag("!!".to_string(), "timestamp".to_string())),
+            "2020-02-02T12:30:00".to_string(),
+        );
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(&timestamp).unwrap();
+        }
+        println!("emitted:\n{}", writer);
+
+        assert_eq!("---\n!!timestamp \"2020-02-02T12:30:00\"", writer);
+    }
+
+    #[test]
+    fn test_array_tag() {
+        let awsfn = Yaml::Array(
+            Some(Tag::new("!", "Join")),
+            vec![
+                Yaml::String(None, ",".to_string()),
+                Yaml::Array(
+                    None,
+                    vec![
+                        Yaml::String(None, "foo".to_string()),
+                        Yaml::String(None, "bar".to_string()),
+                    ],
+                ),
+            ],
+        );
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.compact(true);
+            emitter.dump(&awsfn).unwrap();
+        }
+        println!("emitted:\n{}", writer);
+
+        assert_eq!("---\n!Join\n- \",\"\n- - foo\n  - bar", writer);
+    }
+
+    #[test]
+    fn test_array_tag_as_val() {
+        let awsfn = Yaml::Array(
+            Some(Tag::new("!", "Join")),
+            vec![
+                Yaml::String(None, ",".to_string()),
+                Yaml::Array(
+                    None,
+                    vec![
+                        Yaml::String(None, "foo".to_string()),
+                        Yaml::String(None, "bar".to_string()),
+                    ],
+                ),
+            ],
+        );
+
+        let mut mapping = LinkedHashMap::new();
+        mapping.insert(Yaml::String(None, "key".to_string()), awsfn);
+        let hash = Yaml::Hash(None, mapping);
+
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.compact(true);
+            emitter.dump(&hash).unwrap();
+        }
+        println!("emitted:\n{}", writer);
+
+        assert_eq!("---\nkey: !Join\n  - \",\"\n  - - foo\n    - bar", writer);
     }
 }

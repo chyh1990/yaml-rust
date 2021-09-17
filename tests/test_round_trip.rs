@@ -26,13 +26,13 @@ fn double_roundtrip(original: &str) {
 
 #[test]
 fn test_escape_character() {
-    let y = Yaml::String("\x1b".to_owned());
+    let y = Yaml::String(None, "\x1b".to_owned());
     roundtrip(&y);
 }
 
 #[test]
 fn test_colon_in_string() {
-    let y = Yaml::String("x: %".to_owned());
+    let y = Yaml::String(None, "x: %".to_owned());
     roundtrip(&y);
 }
 
@@ -49,7 +49,7 @@ fn test_numberlike_strings() {
     ];
 
     for doc in &docs {
-        roundtrip(&Yaml::String(doc.to_string()));
+        roundtrip(&Yaml::String(None, doc.to_string()));
         double_roundtrip(&doc);
     }
 }
@@ -61,7 +61,7 @@ fn test_issue133() {
         .unwrap()
         .pop()
         .unwrap();
-    assert_eq!(doc, Yaml::String("0x123".to_string()));
+    assert_eq!(doc, Yaml::String(None, "0x123".to_string()));
 
     let mut out_str = String::new();
     YamlEmitter::new(&mut out_str).dump(&doc).unwrap();

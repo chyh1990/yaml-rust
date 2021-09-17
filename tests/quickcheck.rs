@@ -8,7 +8,7 @@ use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
 quickcheck! {
     fn test_check_weird_keys(xs: Vec<String>) -> TestResult {
         let mut out_str = String::new();
-        let input = Yaml::Array(xs.into_iter().map(Yaml::String).collect());
+        let input = Yaml::Array(None, xs.into_iter().map(|s| Yaml::String(None, s)).collect());
         {
             let mut emitter = YamlEmitter::new(&mut out_str);
             emitter.dump(&input).unwrap();
