@@ -383,6 +383,23 @@ impl Yaml {
     pub fn into_f64(self) -> Option<f64> {
         self.as_f64()
     }
+
+    /// If a value is null or otherwise bad (see variants), consume it and
+    /// replace it with a given value `other`. Otherwise, return self unchanged.
+    ///
+    /// ```
+    /// use yaml_rust2::yaml::Yaml;
+    ///
+    /// assert_eq!(Yaml::BadValue.or(Yaml::Integer(3)),  Yaml::Integer(3));
+    /// assert_eq!(Yaml::Integer(3).or(Yaml::BadValue),  Yaml::Integer(3));
+    /// ```
+    #[must_use]
+    pub fn or(self, other: Self) -> Self {
+        match self {
+            Yaml::BadValue | Yaml::Null => other,
+            this => this,
+        }
+    }
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::should_implement_trait))]
@@ -490,7 +507,7 @@ impl Iterator for YamlIter {
 
 #[cfg(test)]
 mod test {
-    use super::YamlDecoder;
+    use super::{Yaml, YamlDecoder};
 
     #[test]
     fn test_read_bom() {
@@ -572,5 +589,11 @@ c: [1, 2]
         assert!((doc["b"].as_f64().unwrap() - 2.2f64).abs() <= f64::EPSILON);
         assert_eq!(doc["c"][1].as_i64().unwrap(), 2i64);
         assert!(doc["d"][0].is_badvalue());
+    }
+
+    #[test]
+    fn test_or() {
+        assert_eq!(Yaml::Null.or(Yaml::Integer(3)), Yaml::Integer(3));
+        assert_eq!(Yaml::Integer(3).or(Yaml::Integer(7)), Yaml::Integer(3));
     }
 }
