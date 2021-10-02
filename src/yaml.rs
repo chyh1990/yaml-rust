@@ -296,6 +296,15 @@ impl Yaml {
             this => this,
         }
     }
+
+    /// See `or` for behavior. This performs the same operations, but with
+    /// borrowed values for less linear pipelines.
+    pub fn borrowed_or<'a>(&'a self, other: &'a Self) -> &'a Self {
+        match self {
+            Yaml::BadValue | Yaml::Null => other,
+            this => this,
+        }
+    }
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(should_implement_trait))]
