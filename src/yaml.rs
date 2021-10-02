@@ -280,6 +280,31 @@ impl Yaml {
             _ => None,
         }
     }
+
+    /// If a value is null or otherwise bad (see variants), consume it and
+    /// replace it with a given value `other`. Otherwise, return self unchanged.
+    ///
+    /// ```
+    /// use yaml_rust::yaml::Yaml;
+    ///
+    /// assert_eq!(Yaml::BadValue.or(Yaml::Integer(3)),  Yaml::Integer(3));
+    /// assert_eq!(Yaml::Integer(3).or(Yaml::BadValue),  Yaml::Integer(3));
+    /// ```
+    pub fn or(self, other: Self) -> Self {
+        match self {
+            Yaml::BadValue | Yaml::Null => other,
+            this => this,
+        }
+    }
+
+    /// See `or` for behavior. This performs the same operations, but with
+    /// borrowed values for less linear pipelines.
+    pub fn borrowed_or<'a>(&'a self, other: &'a Self) -> &'a Self {
+        match self {
+            Yaml::BadValue | Yaml::Null => other,
+            this => this,
+        }
+    }
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(should_implement_trait))]
@@ -735,5 +760,11 @@ subcommands3:
     fn test_recursion_depth_check_arrays() {
         let s = "[".repeat(10_000) + &"]".repeat(10_000);
         assert!(YamlLoader::load_from_str(&s).is_err());
+    }
+
+    #[test]
+    fn test_or() {
+        assert_eq!(Yaml::Null.or(Yaml::Integer(3)), Yaml::Integer(3));
+        assert_eq!(Yaml::Integer(3).or(Yaml::Integer(7)), Yaml::Integer(3));
     }
 }
