@@ -339,6 +339,8 @@ TEST_F(HandlerSpecTest, Ex2_23_VariousExplicitTags) {
   EXPECT_CALL(handler, OnScalar(_, "tag:yaml.org,2002:binary", 0,                                "R0lGODlhDAAMAIQAAP//9/X\n17unp5WZmZgAAAOfn515eXv\nPz7Y6OjuDg4J+fn5OTk6enp\n56enmleECcgggoBADs=\n"));
   EXPECT_CALL(handler, OnScalar(_, "?", 0, "application specific tag"));
   EXPECT_CALL(handler, OnScalar(_, "!something", 0,                                "The semantics of the tag\nabove may be different for\ndifferent documents."));
+  EXPECT_CALL(handler, OnScalar(_, "?", 0, "scalar tag with value"));
+  EXPECT_CALL(handler, OnScalar(_, "!Ref", 0,                            "reference"));
   EXPECT_CALL(handler, OnMapEnd());
   EXPECT_CALL(handler, OnDocumentEnd());
   Parse(ex2_23);

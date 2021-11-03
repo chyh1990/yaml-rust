@@ -335,6 +335,8 @@ fn test_ex2_23_various_explicit_tags() {
     assert_next!(v, TestEvent::OnScalar);
     assert_next!(v, TestEvent::OnScalar);
     assert_next!(v, TestEvent::OnScalar);
+    assert_next!(v, TestEvent::OnScalar);
+    assert_next!(v, TestEvent::OnScalar);
     assert_next!(v, TestEvent::OnMapEnd);
     assert_next!(v, TestEvent::OnDocumentEnd);
 }

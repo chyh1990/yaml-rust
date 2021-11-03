@@ -90,14 +90,14 @@ impl MarkedEventReceiver for YamlLoader {
                     _ => unreachable!(),
                 }
             }
-            Event::SequenceStart(aid) => {
+            Event::SequenceStart(aid, _) => {
                 self.doc_stack.push((Yaml::Array(Vec::new()), aid));
             }
             Event::SequenceEnd => {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             }
-            Event::MappingStart(aid) => {
+            Event::MappingStart(aid, _) => {
                 self.doc_stack.push((Yaml::Hash(Hash::new()), aid));
                 self.key_stack.push(Yaml::BadValue);
             }
