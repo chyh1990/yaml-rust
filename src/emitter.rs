@@ -1,7 +1,16 @@
+/*
+ * Copyright 2015 Yuheng Chen
+ * Copyright 2021 Genomics plc
+ *
+ * Please refer to the `README.md` and license files (`LICENSE-APACHE` and
+ * `LICENSE-MIT`) at the top-level of this repository for details on licensing.
+ *
+ */
+
 use std::convert::From;
 use std::error::Error;
-use std::fmt::{self, Display};
-use crate::yaml::{Hash, Yaml};
+use std::fmt::{self, Display, Write};
+use crate::yaml::{Hash, Yaml, CommentedYaml};
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
@@ -36,6 +45,8 @@ pub struct YamlEmitter<'a> {
     compact: bool,
 
     level: isize,
+    post_node_string: Option<String>,
+    pre_node_string: Option<String>,
 }
 
 pub type EmitResult = Result<(), EmitError>;
@@ -103,6 +114,19 @@ fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
     Ok(())
 }
 
+fn write_indent(writer: &'_ mut dyn fmt::Write, level: isize, best_indent: usize) -> EmitResult {
+    if level <= 0 {
+        return Ok(());
+    }
+    for _ in 0..level {
+        for _ in 0..best_indent {
+            write!(writer, " ")?;
+        }
+    }
+    Ok(())
+}
+
+
 impl<'a> YamlEmitter<'a> {
     pub fn new(writer: &'a mut dyn fmt::Write) -> YamlEmitter {
         YamlEmitter {
@@ -110,6 +134,8 @@ impl<'a> YamlEmitter<'a> {
             best_indent: 2,
             compact: true,
             level: -1,
+            post_node_string: None,
+            pre_node_string: None,
         }
     }
 
@@ -134,18 +160,35 @@ impl<'a> YamlEmitter<'a> {
         // write DocumentStart
         writeln!(self.writer, "---")?;
         self.level = -1;
-        self.emit_node(doc)
+        self.emit_node(doc)?;
+        self.emit_post_node_string()?;
+        Ok(())
     }
 
-    fn write_indent(&mut self) -> EmitResult {
-        if self.level <= 0 {
-            return Ok(());
+    fn emit_line_begin(&mut self) -> EmitResult {
+        write_indent(self.writer, self.level, self.best_indent)?;
+        Ok(())
+    }
+
+    fn emit_pre_node_string(&mut self) -> EmitResult {
+        if let Some(pre_node_string) = &self.pre_node_string {
+            write!(self.writer, "{}", pre_node_string)?;
+            self.pre_node_string = None;
         }
-        for _ in 0..self.level {
-            for _ in 0..self.best_indent {
-                write!(self.writer, " ")?;
-            }
+        Ok(())
+    }
+
+    fn emit_post_node_string(&mut self) -> EmitResult {
+        if let Some(post_node_string) = &self.post_node_string {
+            write!(self.writer, "{}", post_node_string)?;
+            self.post_node_string = None;
         }
+        Ok(())
+    }
+
+    fn emit_line_end(&mut self) -> EmitResult {
+        self.emit_post_node_string()?;
+        writeln!(self.writer)?;
         Ok(())
     }
 
@@ -154,6 +197,7 @@ impl<'a> YamlEmitter<'a> {
             Yaml::Array(ref v) => self.emit_array(v),
             Yaml::Hash(ref h) => self.emit_hash(h),
             Yaml::String(ref v) => {
+                self.emit_pre_node_string()?;
                 if need_quotes(v) {
                     escape_str(self.writer, v)?;
                 } else {
@@ -162,6 +206,7 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             }
             Yaml::Boolean(v) => {
+                self.emit_pre_node_string()?;
                 if v {
                     self.writer.write_str("true")?;
                 } else {
@@ -170,31 +215,90 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             }
             Yaml::Integer(v) => {
+                self.emit_pre_node_string()?;
                 write!(self.writer, "{}", v)?;
                 Ok(())
             }
             Yaml::Real(ref v) => {
+                self.emit_pre_node_string()?;
                 write!(self.writer, "{}", v)?;
                 Ok(())
             }
+            Yaml::CommentedYaml(ref c) => self.emit_commented_node(c),
             Yaml::Null | Yaml::BadValue => {
+                self.emit_pre_node_string()?;
                 write!(self.writer, "~")?;
                 Ok(())
             }
-            // XXX(chenyh) Alias
-            _ => Ok(()),
+            Yaml::Alias(_) => Ok(()),
+        }
+    }
+
+    fn emit_full_length_comment(&mut self, comment: &str) -> EmitResult {
+        write!(self.writer, "# {}", comment)?;
+        self.emit_line_end()?;
+        self.emit_line_begin()?;
+        Ok(())
+    }
+
+    fn emit_commented_node(&mut self, c: &CommentedYaml) -> EmitResult {
+        match c {
+            CommentedYaml(node, comments) => {
+                if comments.before.len() > 0 {
+                    for comment in &comments.before {
+                        writeln!(&mut self.writer, "# {}", comment)?;
+                        write_indent(&mut self.writer, self.level, self.best_indent)?;
+                    }
+                    writeln!(&mut self.writer)?;
+                    write_indent(&mut self.writer, self.level, self.best_indent)?;
+                }
+                if comments.head.len() > 0 {
+                    for comment in &comments.head {
+                        writeln!(&mut self.writer, "# {}", comment)?;
+                        write_indent(&mut self.writer, self.level, self.best_indent)?;
+                    }
+                }
+
+                let mut post_node_string_writer = String::new();
+                if let Some(line_comment) = comments.line.as_deref() {
+                    write!(&mut post_node_string_writer, " # {}", line_comment)?;
+                }
+                if comments.tail.len() > 0 {
+                    writeln!(&mut post_node_string_writer)?;
+                    write_indent(&mut post_node_string_writer, self.level, self.best_indent)?;
+                    for comment in &comments.tail {
+                        writeln!(&mut post_node_string_writer, "# {}", comment)?;
+                        write_indent(&mut post_node_string_writer, self.level, self.best_indent)?;
+                    }
+                }
+                if comments.after.len() > 0 {
+                    writeln!(&mut post_node_string_writer)?;
+                    write_indent(&mut post_node_string_writer, self.level, self.best_indent)?;
+                    for comment in &comments.after {
+                        writeln!(&mut post_node_string_writer, "# {}", comment)?;
+                        write_indent(&mut post_node_string_writer, self.level, self.best_indent)?;
+                    }
+                }
+                if post_node_string_writer != "" {
+                    self.post_node_string = Some(post_node_string_writer);
+                }
+
+                self.emit_node(&node)?;
+                Ok(())
+            }
         }
     }
 
     fn emit_array(&mut self, v: &[Yaml]) -> EmitResult {
+        self.emit_pre_node_string()?;
         if v.is_empty() {
             write!(self.writer, "[]")?;
         } else {
             self.level += 1;
             for (cnt, x) in v.iter().enumerate() {
                 if cnt > 0 {
-                    writeln!(self.writer)?;
-                    self.write_indent()?;
+                    self.emit_line_end()?;
+                    self.emit_line_begin()?;
                 }
                 write!(self.writer, "-")?;
                 self.emit_val(true, x)?;
@@ -205,6 +309,7 @@ impl<'a> YamlEmitter<'a> {
     }
 
     fn emit_hash(&mut self, h: &Hash) -> EmitResult {
+        self.emit_pre_node_string()?;
         if h.is_empty() {
             self.writer.write_str("{}")?;
         } else {
@@ -215,19 +320,23 @@ impl<'a> YamlEmitter<'a> {
                     _ => false,
                 };
                 if cnt > 0 {
-                    writeln!(self.writer)?;
-                    self.write_indent()?;
+                    self.emit_line_end()?;
+                    self.emit_line_begin()?;
                 }
                 if complex_key {
                     write!(self.writer, "?")?;
                     self.emit_val(true, k)?;
-                    writeln!(self.writer)?;
-                    self.write_indent()?;
+                    self.emit_line_end()?;
+                    self.emit_line_begin()?;
                     write!(self.writer, ":")?;
                     self.emit_val(true, v)?;
                 } else {
                     self.emit_node(k)?;
                     write!(self.writer, ":")?;
+                    if self.post_node_string.is_some() {
+                        self.emit_line_end()?;
+                        self.emit_line_begin()?;
+                    }
                     self.emit_val(false, v)?;
                 }
             }
@@ -244,28 +353,28 @@ impl<'a> YamlEmitter<'a> {
         match *val {
             Yaml::Array(ref v) => {
                 if (inline && self.compact) || v.is_empty() {
-                    write!(self.writer, " ")?;
+                    self.pre_node_string = Some(" ".to_string());
                 } else {
-                    writeln!(self.writer)?;
+                    self.emit_line_end()?;
                     self.level += 1;
-                    self.write_indent()?;
+                    self.emit_line_begin()?;
                     self.level -= 1;
                 }
                 self.emit_array(v)
             }
             Yaml::Hash(ref h) => {
                 if (inline && self.compact) || h.is_empty() {
-                    write!(self.writer, " ")?;
+                    self.pre_node_string = Some(" ".to_string());
                 } else {
-                    writeln!(self.writer)?;
+                    self.emit_line_end()?;
                     self.level += 1;
-                    self.write_indent()?;
+                    self.emit_line_begin()?;
                     self.level -= 1;
                 }
                 self.emit_hash(h)
             }
             _ => {
-                write!(self.writer, " ")?;
+                self.pre_node_string = Some(" ".to_string());
                 self.emit_node(val)
             }
         }
@@ -621,6 +730,261 @@ a:
 
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let doc = &docs[0];
+        let mut writer = String::new();
+        {
+            let mut emitter = YamlEmitter::new(&mut writer);
+            emitter.dump(doc).unwrap();
+        }
+        println!("original:\n{}", s);
+        println!("emitted:\n{}", writer);
+
+        assert_eq!(s, writer);
+    }
+
+    #[test]
+    fn test_comments() {
+        let s = r#"---
+- # First line of comment before a
+  # Second line of comment before a
+  
+  # First line of comment heading a
+  # Second line of comment heading a
+  a: a value # Line comment on line with a value
+  # First line of comment tailing a value
+  # Second line of comment tailing a value
+  
+  # First line of comment after a value
+  # Second line of comment after a value
+  
+  # First line of comment before b
+  # Second line of comment before b
+  
+  # First line of comment heading b
+  # Second line of comment heading b
+  b: b value # Line comment on line with b value
+  # First line of comment tailing b value
+  # Second line of comment tailing b value
+  
+  # First line of comment after b value
+  # Second line of comment after b value
+  
+  # First line of comment before c
+  # Second line of comment before c
+  
+  # First line of comment heading c
+  # Second line of comment heading c
+  c: # Line comment on line with c
+  # First line of comment tailing c
+  # Second line of comment tailing c
+  
+  # First line of comment after c
+  # Second line of comment after c
+  
+  # First line of comment before c value
+  # Second line of comment before c value
+  
+  # First line of comment heading c value
+  # Second line of comment heading c value
+   c value # Line comment on line with c value
+  # First line of comment tailing c value
+  # Second line of comment tailing c value
+  
+  # First line of comment after c value
+  # Second line of comment after c value
+  
+  # First line of comment before d
+  # Second line of comment before d
+  
+  # First line of comment heading d
+  # Second line of comment heading d
+  d: # Line comment on line with d
+  # First line of comment tailing d
+  # Second line of comment tailing d
+  
+  # First line of comment after d
+  # Second line of comment after d
+  
+  # First line of comment before d value
+  # Second line of comment before d value
+  
+  # First line of comment heading d value
+  # Second line of comment heading d value
+   d value # Line comment on line with d value
+  # First line of comment tailing d value
+  # Second line of comment tailing d value
+  
+  # First line of comment after d value
+  # Second line of comment after d value
+  
+- # First line of comment before a
+  # Second line of comment before a
+  
+  # First line of comment heading a
+  # Second line of comment heading a
+  a: a value # Line comment on line with a value
+  # First line of comment tailing a value
+  # Second line of comment tailing a value
+  
+  # First line of comment after a value
+  # Second line of comment after a value
+  
+  # First line of comment before b
+  # Second line of comment before b
+  
+  # First line of comment heading b
+  # Second line of comment heading b
+  b: b value # Line comment on line with b value
+  # First line of comment tailing b value
+  # Second line of comment tailing b value
+  
+  # First line of comment after b value
+  # Second line of comment after b value
+  
+  # First line of comment before c
+  # Second line of comment before c
+  
+  # First line of comment heading c
+  # Second line of comment heading c
+  c: # Line comment on line with c
+  # First line of comment tailing c
+  # Second line of comment tailing c
+  
+  # First line of comment after c
+  # Second line of comment after c
+  
+  # First line of comment before c value
+  # Second line of comment before c value
+  
+  # First line of comment heading c value
+  # Second line of comment heading c value
+   c value # Line comment on line with c value
+  # First line of comment tailing c value
+  # Second line of comment tailing c value
+  
+  # First line of comment after c value
+  # Second line of comment after c value
+  
+  # First line of comment before d
+  # Second line of comment before d
+  
+  # First line of comment heading d
+  # Second line of comment heading d
+  d: # Line comment on line with d
+  # First line of comment tailing d
+  # Second line of comment tailing d
+  
+  # First line of comment after d
+  # Second line of comment after d
+  
+  # First line of comment before d value
+  # Second line of comment before d value
+  
+  # First line of comment heading d value
+  # Second line of comment heading d value
+   d value # Line comment on line with d value
+  # First line of comment tailing d value
+  # Second line of comment tailing d value
+  
+  # First line of comment after d value
+  # Second line of comment after d value
+  "#;
+        // FIXME: once parser has comment support, we could round-trip this:
+        // let docs = YamlLoader::load_from_str(&s).unwrap();
+        // let doc = &docs[0];
+        // For now, drive emitter manually and verify results are correct:
+        let mut commented_map = linked_hash_map::LinkedHashMap::new();
+        commented_map.insert(
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("a".to_string())),
+                crate::yaml::Comments{
+                    before: vec!["First line of comment before a".to_string(), "Second line of comment before a".to_string()],
+                    head: vec!["First line of comment heading a".to_string(), "Second line of comment heading a".to_string()],
+                    line: None,
+                    tail: vec![],
+                    after: vec![],
+                }
+            )),
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("a value".to_string())),
+                crate::yaml::Comments{
+                    before: vec![],
+                    head: vec![],
+                    line: Some("Line comment on line with a value".to_string()),
+                    tail: vec!["First line of comment tailing a value".to_string(), "Second line of comment tailing a value".to_string()],
+                    after: vec!["First line of comment after a value".to_string(), "Second line of comment after a value".to_string()],
+                }
+            )),
+        );
+        commented_map.insert(
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("b".to_string())),
+                crate::yaml::Comments{
+                    before: vec!["First line of comment before b".to_string(), "Second line of comment before b".to_string()],
+                    head: vec!["First line of comment heading b".to_string(), "Second line of comment heading b".to_string()],
+                    line: None,
+                    tail: vec![],
+                    after: vec![],
+                }
+            )),
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("b value".to_string())),
+                crate::yaml::Comments{
+                    before: vec![],
+                    head: vec![],
+                    line: Some("Line comment on line with b value".to_string()),
+                    tail: vec!["First line of comment tailing b value".to_string(), "Second line of comment tailing b value".to_string()],
+                    after: vec!["First line of comment after b value".to_string(), "Second line of comment after b value".to_string()],
+                }
+            )),
+        );
+        commented_map.insert(
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("c".to_string())),
+                crate::yaml::Comments{
+                    before: vec!["First line of comment before c".to_string(), "Second line of comment before c".to_string()],
+                    head: vec!["First line of comment heading c".to_string(), "Second line of comment heading c".to_string()],
+                    line: Some("Line comment on line with c".to_string()),
+                    tail: vec!["First line of comment tailing c".to_string(), "Second line of comment tailing c".to_string()],
+                    after: vec!["First line of comment after c".to_string(), "Second line of comment after c".to_string()],
+                }
+            )),
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("c value".to_string())),
+                crate::yaml::Comments{
+                    before: vec!["First line of comment before c value".to_string(), "Second line of comment before c value".to_string()],
+                    head: vec!["First line of comment heading c value".to_string(), "Second line of comment heading c value".to_string()],
+                    line: Some("Line comment on line with c value".to_string()),
+                    tail: vec!["First line of comment tailing c value".to_string(), "Second line of comment tailing c value".to_string()],
+                    after: vec!["First line of comment after c value".to_string(), "Second line of comment after c value".to_string()],
+                }
+            )),
+        );
+        commented_map.insert(
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("d".to_string())),
+                crate::yaml::Comments{
+                    before: vec!["First line of comment before d".to_string(), "Second line of comment before d".to_string()],
+                    head: vec!["First line of comment heading d".to_string(), "Second line of comment heading d".to_string()],
+                    line: Some("Line comment on line with d".to_string()),
+                    tail: vec!["First line of comment tailing d".to_string(), "Second line of comment tailing d".to_string()],
+                    after: vec!["First line of comment after d".to_string(), "Second line of comment after d".to_string()],
+                }
+            )),
+            Yaml::CommentedYaml(crate::yaml::CommentedYaml(
+                Box::new(Yaml::String("d value".to_string())),
+                crate::yaml::Comments{
+                    before: vec!["First line of comment before d value".to_string(), "Second line of comment before d value".to_string()],
+                    head: vec!["First line of comment heading d value".to_string(), "Second line of comment heading d value".to_string()],
+                    line: Some("Line comment on line with d value".to_string()),
+                    tail: vec!["First line of comment tailing d value".to_string(), "Second line of comment tailing d value".to_string()],
+                    after: vec!["First line of comment after d value".to_string(), "Second line of comment after d value".to_string()],
+                }
+            )),
+        );
+        let doc = &Yaml::Array(vec![
+            Yaml::Hash(commented_map.clone()),
+            Yaml::Hash(commented_map.clone()),
+        ]);
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
