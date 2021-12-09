@@ -855,4 +855,21 @@ a5: *x
             event.0 != Event::StreamEnd
         } {}
     }
+
+    #[test]
+    fn test_empty_scalar_value() {
+        let s = "a:\nb: ~";
+        let mut p = Parser::new(s.chars());
+        let mut scalars = vec![];
+
+        while let Ok((event, _)) = p.next() {
+            match event {
+                Event::Scalar(item, _, _, _) => scalars.push(item),
+                Event::StreamEnd | Event::DocumentEnd => break,
+                _ => {},
+            }
+        }
+
+        assert_eq!(scalars, vec!["a", "", "b", "~"]);
+    }
 }
