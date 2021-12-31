@@ -53,7 +53,13 @@ pub enum Yaml {
 }
 
 pub type Array = Vec<Yaml>;
+
 pub type Hash = LinkedHashMap<Yaml, Yaml>;
+
+#[derive(Debug)]
+pub enum YamlWarn {
+    DuplicatedHashKey
+}
 
 // parse f64 as Core schema
 // See: https://github.com/chyh1990/yaml-rust/issues/51
@@ -104,7 +110,18 @@ impl MarkedEventReceiver for YamlLoader {
             Event::MappingEnd => {
                 self.key_stack.pop().unwrap();
                 let node = self.doc_stack.pop().unwrap();
-                self.insert_new_node(node);
+
+                let node_tmp = node.clone();
+                match self.insert_new_node(node) {
+                    Some(warn) => {
+                        match warn {
+                            DuplicatedHashKey => {
+                                println!("WARNING: {:?} is duplicated", hash);
+                            }
+                        }
+                    },
+                    None => { /* do nothing*/ }
+                }
             }
             Event::Scalar(v, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
@@ -141,8 +158,7 @@ impl MarkedEventReceiver for YamlLoader {
                     // Datatype is not specified, or unrecognized
                     Yaml::from_str(&v)
                 };
-
-                self.insert_new_node((node, aid));
+                self.insert_new_node((node, aid)); 
             }
             Event::Alias(id) => {
                 let n = match self.anchor_map.get(&id) {
@@ -158,27 +174,45 @@ impl MarkedEventReceiver for YamlLoader {
 }
 
 impl YamlLoader {
-    fn insert_new_node(&mut self, node: (Yaml, usize)) {
+    fn insert_new_node(&mut self, node: (Yaml, usize)) -> Option<YamlWarn> {
         // valid anchor id starts from 1
         if node.1 > 0 {
             self.anchor_map.insert(node.1, node.0.clone());
+            return None;
         }
         if self.doc_stack.is_empty() {
             self.doc_stack.push(node);
+            return None;
         } else {
             let parent = self.doc_stack.last_mut().unwrap();
             match *parent {
-                (Yaml::Array(ref mut v), _) => v.push(node.0),
+                (Yaml::Array(ref mut v), _) => {
+                    v.push(node.0);
+                    return None;
+                },
                 (Yaml::Hash(ref mut h), _) => {
                     let cur_key = self.key_stack.last_mut().unwrap();
+
                     // current node is a key
                     if cur_key.is_badvalue() {
                         *cur_key = node.0;
+                        return None;
                     // current node is a value
                     } else {
                         let mut newkey = Yaml::BadValue;
-                        mem::swap(&mut newkey, cur_key);
-                        h.insert(newkey, node.0);
+
+                        match h.get(&cur_key) {
+                            Some(_) => {
+                                mem::swap(&mut newkey, cur_key);
+                                h.insert(newkey, node.0);
+                                return Some(YamlWarn::DuplicatedHashKey); 
+                            }
+                            None => {
+                                mem::swap(&mut newkey, cur_key);
+                                h.insert(newkey, node.0);
+                                return None;
+                            }
+                        }
                     }
                 }
                 _ => unreachable!(),
