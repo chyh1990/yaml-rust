@@ -1,4 +1,6 @@
-use std::{ffi::OsStr, fs, path::Path};
+use std::fs::{self, DirEntry};
+
+use libtest_mimic::{Arguments, Test, Outcome, run_tests};
 
 use yaml_rust::{
     parser::{Event, EventReceiver, Parser},
@@ -9,83 +11,98 @@ use yaml_rust::{
     yaml,
 };
 
-#[test]
-fn yaml_test_suite() -> Result<(), Box<dyn std::error::Error>> {
-    let mut error_count = 0;
-    for entry in std::fs::read_dir("tests/yaml-test-suite/src")? {
-        let entry = entry?;
-        error_count += run_tests_from_file(&entry.path(), &entry.file_name())?;
-    }
-    println!("Expected errors: {}", EXPECTED_FAILURES.len());
-    if error_count > 0 {
-        panic!("Unexpected errors in testsuite: {}", error_count);
-    }
-    Ok(())
+type Result<T, E=Box<dyn std::error::Error>> = std::result::Result<T, E>;
+
+struct YamlTest {
+    yaml: String,
+    expected_events: String,
+    expected_error: bool,
+    is_xfail: bool,
 }
 
-fn run_tests_from_file(path: impl AsRef<Path>, file_name: &OsStr) -> Result<u32, Box<dyn std::error::Error>> {
-    let test_name = path.as_ref()
-        .file_name().ok_or("")?
-        .to_string_lossy().strip_suffix(".yaml").ok_or("unexpected filename")?.to_owned();
-    let data = fs::read_to_string(path.as_ref())?;
-    let tests = YamlLoader::load_from_str(&data)?;
-    let tests = tests[0].as_vec().unwrap();
-    let mut error_count = 0;
+fn main() -> Result<()> {
+    let mut arguments = Arguments::from_args();
+    if arguments.num_threads.is_none() {
+        arguments.num_threads = Some(1);
+    }
+    let tests: Vec<Vec<_>> = std::fs::read_dir("tests/yaml-test-suite/src")?
+        .map(|entry| -> Result<_>  {
+            let entry = entry?;
+            let tests = load_tests_from_file(&entry)?;
+            Ok(tests)
+        })
+        .collect::<Result<_>>()?;
+    let mut tests: Vec<_> = tests.into_iter().flatten().collect();
+    tests.sort_by_key(|t| t.name.clone());
+    run_tests(
+        &arguments,
+        tests,
+        run_yaml_test,
+    ).exit();
+}
 
-    let mut test = yaml::Hash::new();
+fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
+    let desc = &test.data;
+    let actual_events = parse_to_events(&desc.yaml);
+    let events_diff = actual_events.map(|events| events_differ(events, &desc.expected_events));
+    let error_text = match (events_diff, desc.expected_error) {
+        (Ok(_), true) => Some("no error when expected".into()),
+        (Err(_), true) => None,
+        (Err(e), false) => Some(format!("unexpected error {:?}", e)),
+        (Ok(Some(diff)), false) => Some(format!("events differ: {}", diff)),
+        (Ok(None), false) => None,
+    };
+    match (error_text, desc.is_xfail) {
+        (None, false) => Outcome::Passed,
+        (Some(text), false) => Outcome::Failed { msg: Some(text) },
+        (Some(_), true)  => Outcome::Ignored,
+        (None, true) => Outcome::Failed { msg: Some("expected to fail but passes".into()) },
+    }
+}
+
+fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
+    let file_name = entry.file_name().to_string_lossy().to_string();
+    let test_name = file_name.strip_suffix(".yaml").ok_or("unexpected filename")?;
+    let tests = YamlLoader::load_from_str(&fs::read_to_string(&entry.path())?)?;
+    let tests = tests[0].as_vec().ok_or("no test list found in file")?;
+
+    let mut result = vec![];
+    let mut current_test = yaml::Hash::new();
     for (idx, test_data) in tests.iter().enumerate() {
-        let desc = format!("{}-{}", test_name, idx);
-        let is_xfail = EXPECTED_FAILURES.contains(&desc.as_str());
+        let name = if tests.len() > 1 {
+            format!("{}-{:02}", test_name, idx)
+        } else {
+            test_name.to_string()
+        };
+        let is_xfail = EXPECTED_FAILURES.contains(&name.as_str());
 
         // Test fields except `fail` are "inherited"
         let test_data = test_data.as_hash().unwrap();
-        test.remove(&Yaml::String("fail".into()));
+        current_test.remove(&Yaml::String("fail".into()));
         for (key, value) in test_data.clone() {
-            test.insert(key, value);
+            current_test.insert(key, value);
         }
 
-        if let Some(error) = run_single_test(&test) {
-            if !is_xfail {
-                eprintln!("[{}] {}", desc, error);
-                error_count += 1;
-            }
-        } else {
-            if is_xfail {
-                eprintln!("[{}] UNEXPECTED PASS", desc);
-                error_count += 1;
-            }
-        }
-    }
-    Ok(error_count)
-}
+        let current_test = Yaml::Hash(current_test.clone()); // Much better indexing
 
-fn run_single_test(test: &yaml::Hash) -> Option<String> {
-    if test.get(&Yaml::String("skip".into())).is_some() {
-        return None;
-    }
-    let source = test[&Yaml::String("yaml".into())].as_str().unwrap();
-    let should_fail = test.get(&Yaml::String("fail".into())) == Some(&Yaml::Boolean(true));
-    let actual_events = parse_to_events(&yaml_to_raw(source));
-    if should_fail {
-        if actual_events.is_ok() {
-            return Some(format!("no error while expected"));
+        if current_test["skip"] != Yaml::BadValue {
+            continue;
         }
-    } else {
-        let expected_events = yaml_to_raw(test[&Yaml::String("tree".into())].as_str().unwrap());
-        match actual_events {
-            Ok(events) => {
-                if let Some(diff) = events_differ(events, &expected_events) {
-                    //dbg!(source, yaml_to_raw(source));
-                    return Some(format!("events differ: {}", diff));
-                }
-            }
-            Err(error) => {
-                //dbg!(source, yaml_to_raw(source));
-                return Some(format!("unexpected error {:?}", error));
-            }
-        }
+
+        result.push(Test {
+            name,
+            kind: String::new(),
+            is_ignored: false,
+            is_bench: false,
+            data: YamlTest {
+                yaml: visual_to_raw(current_test["yaml"].as_str().unwrap()),
+                expected_events: visual_to_raw(current_test["tree"].as_str().unwrap()),
+                expected_error: current_test["fail"].as_bool() == Some(true),
+                is_xfail,
+            },
+        });
     }
-    None
+    Ok(result)
 }
 
 fn parse_to_events(source: &str) -> Result<Vec<String>, ScanError> {
@@ -196,8 +213,8 @@ fn events_differ(actual: Vec<String>, expected: &str) -> Option<String> {
     unreachable!()
 }
 
-/// Replace the unprintable characters used in the YAML examples with normal
-fn yaml_to_raw(yaml: &str) -> String {
+/// Convert the snippets from "visual" to "actual" representation
+fn visual_to_raw(yaml: &str) -> String {
     let mut yaml = yaml.to_owned();
     for (pat, replacement) in [
         ("␣", " "),
@@ -254,24 +271,24 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be API limited (not enough information on the event stream level)
     // No tag available for SEQ and MAP
-    "2XXW-0",
-    "35KP-0",
-    "57H4-0",
-    "6JWB-0",
-    "735Y-0",
-    "9KAX-0",
-    "BU8L-0",
-    "C4HZ-0",
-    "EHF6-0",
-    "J7PZ-0",
-    "UGM3-0",
+    "2XXW",
+    "35KP",
+    "57H4",
+    "6JWB",
+    "735Y",
+    "9KAX",
+    "BU8L",
+    "C4HZ",
+    "EHF6",
+    "J7PZ",
+    "UGM3",
     // Cannot resolve tag namespaces
-    "5TYM-0",
-    "6CK3-0",
-    "6WLZ-0",
-    "9WXW-0",
-    "CC74-0",
-    "U3C3-0",
-    "Z9M4-0",
-    "P76L-0", // overriding the `!!` namespace!
+    "5TYM",
+    "6CK3",
+    "6WLZ",
+    "9WXW",
+    "CC74",
+    "U3C3",
+    "Z9M4",
+    "P76L", // overriding the `!!` namespace!
 ];

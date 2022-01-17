@@ -14,8 +14,13 @@ edition = "2018"
 linked-hash-map = "0.5.3"
 
 [dev-dependencies]
+libtest-mimic = "0.3.0"
 quickcheck = "0.9"
 
 [profile.release-lto]
 inherits = "release"
 lto = true
+
+[[test]]
+name = "yaml-test-suite"
+harness = false
