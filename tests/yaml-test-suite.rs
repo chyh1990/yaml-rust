@@ -317,9 +317,14 @@ static EXPECTED_FAILURES: &[&str] = &[
     "Y79Y-03", // unexpected pass
     "Y79Y-04", // unexpected pass
     "Y79Y-05", // unexpected pass
+    "Y79Y-10",
     // TABs in whitespace-only lines
     "DK95-03",
     "DK95-04",
+    // TABs after marker ? or : (space required?)
+    "Y79Y-07",
+    "Y79Y-08",
+    "Y79Y-09",
     // Other TABs
     "DK95-01", // in double-quoted scalar
     // Empty key in flow mappings
@@ -335,9 +340,9 @@ static EXPECTED_FAILURES: &[&str] = &[
     // Flow mapping colon on next line / multiline key in flow mapping
     "4MUZ-00",
     "4MUZ-01",
+    "4MUZ-02",
     "5MUD",
     "9SA2",
-    "C4WK",
     "K3WX",
     "NJ66",
     "UT92",
