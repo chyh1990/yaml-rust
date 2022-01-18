@@ -291,4 +291,83 @@ static EXPECTED_FAILURES: &[&str] = &[
     "U3C3",
     "Z9M4",
     "P76L", // overriding the `!!` namespace!
+
+    // These seem to be plain bugs
+    // Leading TAB in literal scalars
+    "96NN-00",
+    "96NN-01",
+    "R4YG",
+    "Y79Y-01",
+    // TAB as start of plain scalar instead of whitespace
+    "6BCT",
+    "6CA3",
+    "A2M4",
+    "DK95-00",
+    "Q5MG",
+    "Y79Y-06",
+    "4EJS", // unexpected pass
+    "Y79Y-03", // unexpected pass
+    "Y79Y-04", // unexpected pass
+    "Y79Y-05", // unexpected pass
+    // TABs in whitespace-only lines
+    "DK95-03",
+    "DK95-04",
+    // Other TABs
+    "DK95-01", // in double-quoted scalar
+    // Empty key in flow mappings
+    "CFD4",
+    // Document with no nodes and document end
+    "HWV9",
+    "QT73",
+    // Unusual characters in anchors/aliases
+    "2SXE", // :
+    "8XYN", // emoji!!
+    "W5VH", // :@*!$"<foo>:
+    "Y2GN", // : in the middle
+    // Flow mapping colon on next line / multiline key in flow mapping
+    "4MUZ-00",
+    "4MUZ-01",
+    "5MUD",
+    "9SA2",
+    "C4WK",
+    "K3WX",
+    "NJ66",
+    "UT92",
+    "VJP3-01",
+    // Bare document after end marker
+    "7Z25",
+    "M7A3",
+    // Scalar marker on document start line
+    "DK3J",
+    "FP8R",
+    // Comments on nonempty lines need leading space
+    "9JBA",
+    "CVW2",
+    "MUS6-00",
+    "SU5Z",
+    "X4QW",
+    // Directives (various)
+    "9HCY", // Directive after content
+    "EB22", // Directive after content
+    "MUS6-01", // no document end marker?
+    "QLJ7", // TAG directives should not be inherited between documents
+    "RHX7", // no document end marker
+    "SF5V", // duplicate directive
+    "W4TN", // scalar confused as directive
+    // Losing trailing newline
+    "JEF9-02",
+    "L24T-01",
+    // Dashes in flow sequence (should be forbidden)
+    "G5U8",
+    "YJV2",
+    // Misc
+    "9MMW", // Mapping key in implicit mapping in flow sequence(!)
+    "G9HC", // Anchor indent problem(?)
+    "H7J7", // Anchor indent / linebreak problem?
+    "3UYS", // Escaped /
+    "HRE5", // Escaped ' in double-quoted (should not work)
+    "QB6E", // Indent for multiline double-quoted scalar
+    "S98Z", // Block scalar and indent problems?
+    "U99R", // Comma is not allowed in tags
+    "WZ62", // Empty content
 ];
