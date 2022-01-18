@@ -34,6 +34,11 @@ fn main() -> Result<()> {
         .collect::<Result<_>>()?;
     let mut tests: Vec<_> = tests.into_iter().flatten().collect();
     tests.sort_by_key(|t| t.name.clone());
+
+    for &test in EXPECTED_FAILURES {
+        assert!(tests.iter().find(|t| t.name == test).is_some());
+    }
+
     run_tests(
         &arguments,
         tests,
