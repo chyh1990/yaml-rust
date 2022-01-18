@@ -35,8 +35,11 @@ fn main() -> Result<()> {
     let mut tests: Vec<_> = tests.into_iter().flatten().collect();
     tests.sort_by_key(|t| t.name.clone());
 
-    for &test in EXPECTED_FAILURES {
-        assert!(tests.iter().find(|t| t.name == test).is_some());
+    let missing_xfails: Vec<_> = EXPECTED_FAILURES.iter()
+        .filter(|&&test| !tests.iter().any(|t| t.name == test))
+        .collect();
+    if !missing_xfails.is_empty() {
+        panic!("The following EXPECTED_FAILURES not found during discovery: {:?}", missing_xfails);
     }
 
     run_tests(
