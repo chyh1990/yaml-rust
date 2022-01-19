@@ -14,6 +14,7 @@ use yaml_rust::{
 type Result<T, E=Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 struct YamlTest {
+    yaml_visual: String,
     yaml: String,
     expected_events: String,
     expected_error: bool,
@@ -53,13 +54,17 @@ fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
     let desc = &test.data;
     let actual_events = parse_to_events(&desc.yaml);
     let events_diff = actual_events.map(|events| events_differ(events, &desc.expected_events));
-    let error_text = match (events_diff, desc.expected_error) {
+    let mut error_text = match (events_diff, desc.expected_error) {
         (Ok(_), true) => Some("no error when expected".into()),
         (Err(_), true) => None,
         (Err(e), false) => Some(format!("unexpected error {:?}", e)),
         (Ok(Some(diff)), false) => Some(format!("events differ: {}", diff)),
         (Ok(None), false) => None,
     };
+    if let Some(text) = &mut error_text {
+        use std::fmt::Write;
+        let _ = write!(text, "\n### Input:\n{}\n### End", desc.yaml_visual);
+    }
     match (error_text, desc.is_xfail) {
         (None, false) => Outcome::Passed,
         (Some(text), false) => Outcome::Failed { msg: Some(text) },
@@ -103,6 +108,7 @@ fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
             is_ignored: false,
             is_bench: false,
             data: YamlTest {
+                yaml_visual: current_test["yaml"].as_str().unwrap().to_string(),
                 yaml: visual_to_raw(current_test["yaml"].as_str().unwrap()),
                 expected_events: visual_to_raw(current_test["tree"].as_str().unwrap()),
                 expected_error: current_test["fail"].as_bool() == Some(true),
