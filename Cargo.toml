@@ -1,6 +1,6 @@
 [package]
 name = "yaml-rust"
-version = "0.4.5" # remember to update html_root_url
+version = "0.4.6" # remember to update html_root_url
 authors = ["Yuheng Chen <yuhengchen@sensetime.com>"]
 homepage = "http://chyh1990.github.io/yaml-rust/"
 documentation = "https://docs.rs/yaml-rust"
@@ -14,4 +14,4 @@ edition = "2018"
 linked-hash-map = "0.5.3"
 
 [dev-dependencies]
-quickcheck = "0.9"
+quickcheck = "1"
