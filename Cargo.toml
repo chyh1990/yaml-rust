@@ -8,10 +8,10 @@ license = "MIT/Apache-2.0"
 description = "The missing YAML 1.2 parser for rust"
 repository = "https://github.com/chyh1990/yaml-rust"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 linked-hash-map = "0.5.3"
 
 [dev-dependencies]
-quickcheck = "0.9"
+quickcheck = "1.0.3"

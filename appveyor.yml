@@ -5,7 +5,7 @@ branches:
     - master
 
 environment:
-  LLVM_VERSION: 9.0.1
+  LLVM_VERSION: 13.0.0
   PLATFORM: x64
   matrix:
     - channel: stable

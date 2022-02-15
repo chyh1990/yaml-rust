@@ -1,12 +1,9 @@
 #![allow(dead_code)]
 #![allow(non_upper_case_globals)]
-extern crate yaml_rust;
-
 use yaml_rust::parser::{Event, EventReceiver, Parser};
 use yaml_rust::scanner::TScalarStyle;
 
 // These names match the names used in the C++ test suite.
-#[cfg_attr(feature = "cargo-clippy", allow(enum_variant_names))]
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 enum TestEvent {
     OnDocumentStart,
