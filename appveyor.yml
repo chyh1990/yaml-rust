@@ -48,8 +48,8 @@ install:
     - cargo -vV
     # Install LLVM for GNU
     - if %type%==gnu set PATH=C:\msys64\mingw%MINGW_BITS%\bin;C:\msys64\usr\bin;%PATH%
-    - if %type%==gnu set "MINGW_URL=http://repo.msys2.org/mingw/%RUST_PLATFORM%/mingw-w64-%RUST_PLATFORM%"
-    - if %type%==gnu set "URL_VER=%LLVM_VERSION%-1-any.pkg.tar.xz"
+    - if %type%==gnu set "MINGW_URL=https://repo.msys2.org/mingw/%RUST_PLATFORM%/mingw-w64-%RUST_PLATFORM%"
+    - if %type%==gnu set "URL_VER=%LLVM_VERSION%-1-any.pkg.tar.zst"
     - if %type%==gnu bash -lc "pacman -U --noconfirm $MINGW_URL-clang-$URL_VER $MINGW_URL-llvm-$URL_VER"
     - if %type%==gnu bash -lc "clang --version"
     # Use preinstalled LLVM for MSVC
