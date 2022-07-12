@@ -116,6 +116,13 @@ key1:a2
 ";
         assert!(YamlLoader::load_from_str(s).is_err());
         assert!(try_fail(s).is_err());
+        assert_eq!(
+            try_fail(s).unwrap_err().info(),
+            "mapping values are not allowed in this context"
+        );
+        assert_eq!(
+            try_fail(s).unwrap_err().to_string(),
+            "mapping values are not allowed in this context at line 4 column 4"
+        );
     }
-
 }

@@ -60,6 +60,10 @@ impl ScanError {
     pub fn marker(&self) -> &Marker {
         &self.mark
     }
+
+    pub fn info(&self) -> &str {
+        self.info.as_ref()
+    }
 }
 
 impl Error for ScanError {
