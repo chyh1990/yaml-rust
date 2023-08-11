@@ -6,7 +6,7 @@ use yaml_rust::parser::{Event, EventReceiver, Parser};
 use yaml_rust::scanner::TScalarStyle;
 
 // These names match the names used in the C++ test suite.
-#[cfg_attr(feature = "cargo-clippy", allow(enum_variant_names))]
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::enum_variant_names))]
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 enum TestEvent {
     OnDocumentStart,
@@ -76,24 +76,18 @@ include!("spec_test.rs.inc");
 
 #[test]
 fn test_mapvec_legal() {
-    use yaml_rust::yaml::{Array, Hash, Yaml};
+    use yaml_rust::yaml::{Hash, Yaml};
     use yaml_rust::{YamlEmitter, YamlLoader};
 
     // Emitting a `map<map<seq<_>>, _>` should result in legal yaml that
     // we can parse.
 
-    let mut key = Array::new();
-    key.push(Yaml::Integer(1));
-    key.push(Yaml::Integer(2));
-    key.push(Yaml::Integer(3));
+    let key = vec![Yaml::Integer(1), Yaml::Integer(2), Yaml::Integer(3)];
 
     let mut keyhash = Hash::new();
     keyhash.insert(Yaml::String("key".into()), Yaml::Array(key));
 
-    let mut val = Array::new();
-    val.push(Yaml::Integer(4));
-    val.push(Yaml::Integer(5));
-    val.push(Yaml::Integer(6));
+    let val = vec![Yaml::Integer(4), Yaml::Integer(5), Yaml::Integer(6)];
 
     let mut hash = Hash::new();
     hash.insert(Yaml::Hash(keyhash), Yaml::Array(val));

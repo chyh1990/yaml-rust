@@ -21,13 +21,13 @@ fn dump_node(doc: &yaml::Yaml, indent: usize) {
         yaml::Yaml::Hash(ref h) => {
             for (k, v) in h {
                 print_indent(indent);
-                println!("{:?}:", k);
+                println!("{k:?}:");
                 dump_node(v, indent + 1);
             }
         }
         _ => {
             print_indent(indent);
-            println!("{:?}", doc);
+            println!("{doc:?}");
         }
     }
 }

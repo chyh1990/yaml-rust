@@ -1,6 +1,8 @@
-use linked_hash_map::LinkedHashMap;
-use crate::parser::*;
+#![allow(clippy::module_name_repetitions)]
+
+use crate::parser::{Event, MarkedEventReceiver, Parser};
 use crate::scanner::{Marker, ScanError, TScalarStyle, TokenType};
+use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
 use std::f64;
 use std::i64;
@@ -201,6 +203,7 @@ impl YamlLoader {
 
 macro_rules! define_as (
     ($name:ident, $t:ident, $yt:ident) => (
+#[must_use]
 pub fn $name(&self) -> Option<$t> {
     match *self {
         Yaml::$yt(v) => Some(v),
@@ -212,6 +215,7 @@ pub fn $name(&self) -> Option<$t> {
 
 macro_rules! define_as_ref (
     ($name:ident, $t:ty, $yt:ident) => (
+#[must_use]
 pub fn $name(&self) -> Option<$t> {
     match *self {
         Yaml::$yt(ref v) => Some(v),
@@ -223,6 +227,7 @@ pub fn $name(&self) -> Option<$t> {
 
 macro_rules! define_into (
     ($name:ident, $t:ty, $yt:ident) => (
+#[must_use]
 pub fn $name(self) -> Option<$t> {
     match self {
         Yaml::$yt(v) => Some(v),
@@ -246,59 +251,58 @@ impl Yaml {
     define_into!(into_hash, Hash, Hash);
     define_into!(into_vec, Array, Array);
 
+    /// Returns the is null of this [`Yaml`].
+    #[must_use]
     pub fn is_null(&self) -> bool {
-        match *self {
-            Yaml::Null => true,
-            _ => false,
-        }
+        matches!(*self, Yaml::Null)
     }
 
+    /// Returns the is badvalue of this [`Yaml`].
+    #[must_use]
     pub fn is_badvalue(&self) -> bool {
-        match *self {
-            Yaml::BadValue => true,
-            _ => false,
-        }
+        matches!(*self, Yaml::BadValue)
     }
 
+    #[must_use]
     pub fn is_array(&self) -> bool {
-        match *self {
-            Yaml::Array(_) => true,
-            _ => false,
-        }
+        matches!(*self, Yaml::Array(_))
     }
 
+    #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
-        match *self {
-            Yaml::Real(ref v) => parse_f64(v),
-            _ => None,
+        if let Yaml::Real(ref v) = self {
+            parse_f64(v)
+        } else {
+            None
         }
     }
 
+    #[must_use]
     pub fn into_f64(self) -> Option<f64> {
-        match self {
-            Yaml::Real(ref v) => parse_f64(v),
-            _ => None,
+        if let Yaml::Real(ref v) = self {
+            parse_f64(v)
+        } else {
+            None
         }
     }
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(should_implement_trait))]
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::should_implement_trait))]
 impl Yaml {
     // Not implementing FromStr because there is no possibility of Error.
     // This function falls back to Yaml::String if nothing else matches.
+    #[must_use]
     pub fn from_str(v: &str) -> Yaml {
-        if v.starts_with("0x") {
-            if let Ok(i) = i64::from_str_radix(&v[2..], 16) {
+        if let Some(number) = v.strip_prefix("0x") {
+            if let Ok(i) = i64::from_str_radix(number, 16) {
                 return Yaml::Integer(i);
             }
-        }
-        if v.starts_with("0o") {
-            if let Ok(i) = i64::from_str_radix(&v[2..], 8) {
+        } else if let Some(number) = v.strip_prefix("0o") {
+            if let Ok(i) = i64::from_str_radix(number, 8) {
                 return Yaml::Integer(i);
             }
-        }
-        if v.starts_with('+') {
-            if let Ok(i) = v[1..].parse::<i64>() {
+        } else if let Some(number) = v.strip_prefix('+') {
+            if let Ok(i) = number.parse::<i64>() {
                 return Yaml::Integer(i);
             }
         }
@@ -306,10 +310,15 @@ impl Yaml {
             "~" | "null" => Yaml::Null,
             "true" => Yaml::Boolean(true),
             "false" => Yaml::Boolean(false),
-            _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
-            // try parsing as f64
-            _ if parse_f64(v).is_some() => Yaml::Real(v.to_owned()),
-            _ => Yaml::String(v.to_owned()),
+            _ => {
+                if let Ok(integer) = v.parse::<i64>() {
+                    Yaml::Integer(integer)
+                } else if parse_f64(v).is_some() {
+                    Yaml::Real(v.to_owned())
+                } else {
+                    Yaml::String(v.to_owned())
+                }
+            }
         }
     }
 }
@@ -348,7 +357,7 @@ impl IntoIterator for Yaml {
 
     fn into_iter(self) -> Self::IntoIter {
         YamlIter {
-            yaml: self.into_vec().unwrap_or_else(Vec::new).into_iter(),
+            yaml: self.into_vec().unwrap_or_default().into_iter(),
         }
     }
 }
@@ -366,9 +375,11 @@ impl Iterator for YamlIter {
 }
 
 #[cfg(test)]
+#[allow(clippy::bool_assert_comparison)]
+#[allow(clippy::float_cmp)]
 mod test {
+    use crate::yaml::{vec, Yaml, YamlLoader};
     use std::f64;
-    use crate::yaml::*;
     #[test]
     fn test_coerce() {
         let s = "---
@@ -376,7 +387,7 @@ a: 1
 b: 2.2
 c: [1, 2]
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let doc = &out[0];
         assert_eq!(doc["a"].as_i64().unwrap(), 1i64);
         assert_eq!(doc["b"].as_f64().unwrap(), 2.2f64);
@@ -386,7 +397,7 @@ c: [1, 2]
 
     #[test]
     fn test_empty_doc() {
-        let s: String = "".to_owned();
+        let s: String = String::new();
         YamlLoader::load_from_str(&s).unwrap();
         let s: String = "---".to_owned();
         assert_eq!(YamlLoader::load_from_str(&s).unwrap()[0], Yaml::Null);
@@ -425,7 +436,7 @@ a7: 你好
 ---
 'a scalar'
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         assert_eq!(out.len(), 3);
     }
 
@@ -437,7 +448,7 @@ a1: &DEFAULT
     b2: d
 a2: *DEFAULT
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let doc = &out[0];
         assert_eq!(doc["a2"]["b1"].as_i64().unwrap(), 4);
     }
@@ -449,7 +460,7 @@ a1: &DEFAULT
     b1: 4
     b2: *DEFAULT
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let doc = &out[0];
         assert_eq!(doc["a1"]["b2"], Yaml::BadValue);
     }
@@ -458,7 +469,7 @@ a1: &DEFAULT
     fn test_github_27() {
         // https://github.com/chyh1990/yaml-rust/issues/27
         let s = "&a";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let doc = &out[0];
         assert_eq!(doc.as_str().unwrap(), "");
     }
@@ -494,7 +505,7 @@ a1: &DEFAULT
 - +12345
 - [ true, false ]
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let doc = &out[0];
 
         assert_eq!(doc[0].as_str().unwrap(), "string");
@@ -531,14 +542,14 @@ a1: &DEFAULT
     fn test_bad_hyphen() {
         // See: https://github.com/chyh1990/yaml-rust/issues/23
         let s = "{-";
-        assert!(YamlLoader::load_from_str(&s).is_err());
+        assert!(YamlLoader::load_from_str(s).is_err());
     }
 
     #[test]
     fn test_issue_65() {
         // See: https://github.com/chyh1990/yaml-rust/issues/65
         let b = "\n\"ll\\\"ll\\\r\n\"ll\\\"ll\\\r\r\r\rU\r\r\rU";
-        assert!(YamlLoader::load_from_str(&b).is_err());
+        assert!(YamlLoader::load_from_str(b).is_err());
     }
 
     #[test]
@@ -582,7 +593,7 @@ a1: &DEFAULT
 - .NAN
 - !!float .INF
 ";
-        let mut out = YamlLoader::load_from_str(&s).unwrap().into_iter();
+        let mut out = YamlLoader::load_from_str(s).unwrap().into_iter();
         let mut doc = out.next().unwrap().into_iter();
 
         assert_eq!(doc.next().unwrap().into_string().unwrap(), "string");
@@ -614,7 +625,7 @@ b: ~
 a: ~
 c: ~
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let first = out.into_iter().next().unwrap();
         let mut iter = first.into_hash().unwrap().into_iter();
         assert_eq!(
@@ -640,7 +651,7 @@ c: ~
 1:
     important: false
 ";
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let first = out.into_iter().next().unwrap();
         assert_eq!(first[0]["important"].as_bool().unwrap(), true);
     }
@@ -716,10 +727,10 @@ subcommands3:
     about: server related commands
             "#;
 
-        let out = YamlLoader::load_from_str(&s).unwrap();
+        let out = YamlLoader::load_from_str(s).unwrap();
         let doc = &out.into_iter().next().unwrap();
 
-        println!("{:#?}", doc);
+        println!("{doc:#?}");
         assert_eq!(doc["subcommands"][0]["server"], Yaml::Null);
         assert!(doc["subcommands2"][0]["server"].as_hash().is_some());
         assert!(doc["subcommands3"][0]["server"].as_hash().is_some());

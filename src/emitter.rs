@@ -1,7 +1,7 @@
+use crate::yaml::{Hash, Yaml};
 use std::convert::From;
 use std::error::Error;
 use std::fmt::{self, Display};
-use crate::yaml::{Hash, Yaml};
 
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
@@ -30,6 +30,7 @@ impl From<fmt::Error> for EmitError {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct YamlEmitter<'a> {
     writer: &'a mut dyn fmt::Write,
     best_indent: usize,
@@ -126,6 +127,7 @@ impl<'a> YamlEmitter<'a> {
     }
 
     /// Determine if this emitter is using 'compact inline notation'.
+    #[must_use]
     pub fn is_compact(&self) -> bool {
         self.compact
     }
@@ -157,7 +159,7 @@ impl<'a> YamlEmitter<'a> {
                 if need_quotes(v) {
                     escape_str(self.writer, v)?;
                 } else {
-                    write!(self.writer, "{}", v)?;
+                    write!(self.writer, "{v}")?;
                 }
                 Ok(())
             }
@@ -170,11 +172,11 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             }
             Yaml::Integer(v) => {
-                write!(self.writer, "{}", v)?;
+                write!(self.writer, "{v}")?;
                 Ok(())
             }
             Yaml::Real(ref v) => {
-                write!(self.writer, "{}", v)?;
+                write!(self.writer, "{v}")?;
                 Ok(())
             }
             Yaml::Null | Yaml::BadValue => {
@@ -182,7 +184,7 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             }
             // XXX(chenyh) Alias
-            _ => Ok(()),
+            Yaml::Alias(_) => Ok(()),
         }
     }
 
@@ -210,10 +212,7 @@ impl<'a> YamlEmitter<'a> {
         } else {
             self.level += 1;
             for (cnt, (k, v)) in h.iter().enumerate() {
-                let complex_key = match *k {
-                    Yaml::Hash(_) | Yaml::Array(_) => true,
-                    _ => false,
-                };
+                let complex_key = matches!(*k, Yaml::Hash(_) | Yaml::Array(_));
                 if cnt > 0 {
                     writeln!(self.writer)?;
                     self.write_indent()?;
@@ -286,19 +285,22 @@ impl<'a> YamlEmitter<'a> {
 /// * When the string is null or ~ (otherwise, it would be considered as a null value);
 /// * When the string looks like a number, such as integers (e.g. 2, 14, etc.), floats (e.g. 2.6, 14.9) and exponential numbers (e.g. 12e7, etc.) (otherwise, it would be treated as a numeric value);
 /// * When the string looks like a date (e.g. 2014-12-31) (otherwise it would be automatically converted into a Unix timestamp).
+#[allow(clippy::doc_markdown)]
 fn need_quotes(string: &str) -> bool {
     fn need_quotes_spaces(string: &str) -> bool {
         string.starts_with(' ') || string.ends_with(' ')
     }
 
-    string == ""
+    string.is_empty()
         || need_quotes_spaces(string)
-        || string.starts_with(|character: char| match character {
-            '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' => true,
-            _ => false,
+        || string.starts_with(|character: char| {
+            matches!(
+                character,
+                '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@'
+            )
         })
-        || string.contains(|character: char| match character {
-            ':'
+        || string.contains(|character: char| {
+            matches!(character, ':'
             | '{'
             | '}'
             | '['
@@ -314,8 +316,7 @@ fn need_quotes(string: &str) -> bool {
             | '\n'
             | '\r'
             | '\x0e'..='\x1a'
-            | '\x1c'..='\x1f' => true,
-            _ => false,
+            | '\x1c'..='\x1f')
         })
         || [
             // http://yaml.org/type/bool.html
@@ -335,6 +336,7 @@ fn need_quotes(string: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::similar_names)]
 mod test {
     use super::*;
     use crate::YamlLoader;
@@ -354,18 +356,18 @@ a4:
     - 2
 ";
 
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        println!("original:\n{}", s);
-        println!("emitted:\n{}", writer);
+        println!("original:\n{s}");
+        println!("emitted:\n{writer}");
         let docs_new = match YamlLoader::load_from_str(&writer) {
             Ok(y) => y,
-            Err(e) => panic!(format!("{}", e)),
+            Err(e) => panic!("{}", e),
         };
         let doc_new = &docs_new[0];
 
@@ -393,7 +395,7 @@ products:
   {}:
     empty hash key
             "#;
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
@@ -402,7 +404,7 @@ products:
         }
         let docs_new = match YamlLoader::load_from_str(&writer) {
             Ok(y) => y,
-            Err(e) => panic!(format!("{}", e)),
+            Err(e) => panic!("{}", e),
         };
         let doc_new = &docs_new[0];
         assert_eq!(doc, doc_new);
@@ -444,7 +446,7 @@ x: test
 y: avoid quoting here
 z: string with spaces"#;
 
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
@@ -452,7 +454,7 @@ z: string with spaces"#;
             emitter.dump(doc).unwrap();
         }
 
-        assert_eq!(s, writer, "actual:\n\n{}\n", writer);
+        assert_eq!(s, writer, "actual:\n\n{writer}\n");
     }
 
     #[test]
@@ -502,7 +504,7 @@ null0: ~
 bool0: true
 bool1: false"#;
 
-        let docs = YamlLoader::load_from_str(&input).unwrap();
+        let docs = YamlLoader::load_from_str(input).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
@@ -512,19 +514,18 @@ bool1: false"#;
 
         assert_eq!(
             expected, writer,
-            "expected:\n{}\nactual:\n{}\n",
-            expected, writer
+            "expected:\n{expected}\nactual:\n{writer}\n",
         );
     }
 
     #[test]
     fn test_empty_and_nested() {
-        test_empty_and_nested_flag(false)
+        test_empty_and_nested_flag(false);
     }
 
     #[test]
     fn test_empty_and_nested_compact() {
-        test_empty_and_nested_flag(true)
+        test_empty_and_nested_flag(true);
     }
 
     fn test_empty_and_nested_flag(compact: bool) {
@@ -551,7 +552,7 @@ e:
     h: []"#
         };
 
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
@@ -573,15 +574,15 @@ a:
     - - e
       - f"#;
 
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        println!("original:\n{}", s);
-        println!("emitted:\n{}", writer);
+        println!("original:\n{s}");
+        println!("emitted:\n{writer}");
 
         assert_eq!(s, writer);
     }
@@ -597,15 +598,15 @@ a:
       - - f
       - - e"#;
 
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        println!("original:\n{}", s);
-        println!("emitted:\n{}", writer);
+        println!("original:\n{s}");
+        println!("emitted:\n{writer}");
 
         assert_eq!(s, writer);
     }
@@ -619,17 +620,16 @@ a:
       d:
         e: f"#;
 
-        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let docs = YamlLoader::load_from_str(s).unwrap();
         let doc = &docs[0];
         let mut writer = String::new();
         {
             let mut emitter = YamlEmitter::new(&mut writer);
             emitter.dump(doc).unwrap();
         }
-        println!("original:\n{}", s);
-        println!("emitted:\n{}", writer);
+        println!("original:\n{s}");
+        println!("emitted:\n{writer}");
 
         assert_eq!(s, writer);
     }
-
 }

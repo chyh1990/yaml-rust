@@ -1,3 +1,6 @@
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+
 use std::collections::VecDeque;
 use std::error::Error;
 use std::{char, fmt};
@@ -30,14 +33,17 @@ impl Marker {
         Marker { index, line, col }
     }
 
+    #[must_use]
     pub fn index(&self) -> usize {
         self.index
     }
 
+    #[must_use]
     pub fn line(&self) -> usize {
         self.line
     }
 
+    #[must_use]
     pub fn col(&self) -> usize {
         self.col
     }
@@ -50,6 +56,7 @@ pub struct ScanError {
 }
 
 impl ScanError {
+    #[must_use]
     pub fn new(loc: Marker, info: &str) -> ScanError {
         ScanError {
             mark: loc,
@@ -57,6 +64,7 @@ impl ScanError {
         }
     }
 
+    #[must_use]
     pub fn marker(&self) -> &Marker {
         &self.mark
     }
@@ -137,6 +145,7 @@ impl SimpleKey {
 }
 
 #[derive(Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Scanner<T> {
     rdr: T,
     mark: Marker,
@@ -194,19 +203,15 @@ fn is_blankz(c: char) -> bool {
 }
 #[inline]
 fn is_digit(c: char) -> bool {
-    c >= '0' && c <= '9'
+    c.is_ascii_digit()
 }
 #[inline]
 fn is_alpha(c: char) -> bool {
-    match c {
-        '0'..='9' | 'a'..='z' | 'A'..='Z' => true,
-        '_' | '-' => true,
-        _ => false,
-    }
+    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | '_' | '-')
 }
 #[inline]
 fn is_hex(c: char) -> bool {
-    (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+    c.is_ascii_digit() || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
 }
 #[inline]
 fn as_hex(c: char) -> u32 {
@@ -219,10 +224,7 @@ fn as_hex(c: char) -> u32 {
 }
 #[inline]
 fn is_flow(c: char) -> bool {
-    match c {
-        ',' | '[' | ']' | '{' | '}' => true,
-        _ => false,
-    }
+    matches!(c, ',' | '[' | ']' | '{' | '}')
 }
 
 pub type ScanResult = Result<(), ScanError>;
@@ -251,10 +253,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
     #[inline]
     pub fn get_error(&self) -> Option<ScanError> {
-        match self.error {
-            None => None,
-            Some(ref e) => Some(e.clone()),
-        }
+        self.error.as_ref().map(std::clone::Clone::clone)
     }
 
     #[inline]
@@ -419,7 +418,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => self.fetch_plain_scalar(),
             '%' | '@' | '`' => Err(ScanError::new(
                 self.mark,
-                &format!("unexpected character: `{}'", c),
+                &format!("unexpected character: `{c}'"),
             )),
             _ => self.fetch_plain_scalar(),
         }
@@ -697,7 +696,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
 
         let is_secondary = handle == "!!";
-        let prefix = self.scan_tag_uri(true, is_secondary, &String::new(), mark)?;
+        let prefix = self.scan_tag_uri(true, is_secondary, "", mark)?;
 
         self.lookahead(1);
 
@@ -733,7 +732,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             // Eat '!<'
             self.skip();
             self.skip();
-            suffix = self.scan_tag_uri(false, false, &String::new(), &start_mark)?;
+            suffix = self.scan_tag_uri(false, false, "", &start_mark)?;
 
             if self.ch() != '>' {
                 return Err(ScanError::new(
@@ -751,7 +750,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 if handle == "!!" {
                     secondary = true;
                 }
-                suffix = self.scan_tag_uri(false, secondary, &String::new(), &start_mark)?;
+                suffix = self.scan_tag_uri(false, secondary, "", &start_mark)?;
             } else {
                 suffix = self.scan_tag_uri(false, false, &handle, &start_mark)?;
                 handle = "!".to_owned();
@@ -1072,6 +1071,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn scan_block_scalar(&mut self, literal: bool) -> Result<Token, ScanError> {
         let start_mark = self.mark;
         let mut chomping: i32 = 0;
@@ -1280,6 +1280,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn scan_flow_scalar(&mut self, single: bool) -> Result<Token, ScanError> {
         let start_mark = self.mark;
 
@@ -1389,12 +1390,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                                 value = (value << 4) + as_hex(self.buffer[i]);
                             }
 
-                            let ch = match char::from_u32(value) {
-                                Some(v) => v,
-                                None => {
-                                    return Err(ScanError::new(start_mark,
-                                        "while parsing a quoted scalar, found invalid Unicode character escape code"));
-                                }
+                            let Some(ch) = char::from_u32(value) else {
+                                return Err(ScanError::new(start_mark, "while parsing a quoted scalar, found invalid Unicode character escape code"));
                             };
                             string.push(ch);
 
@@ -1739,6 +1736,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 }
 
 #[cfg(test)]
+#[allow(clippy::enum_glob_use)]
 mod test {
     use super::TokenType::*;
     use super::*;
