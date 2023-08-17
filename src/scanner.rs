@@ -21,6 +21,7 @@ pub enum TScalarStyle {
     Foled,
 }
 
+/// A location in a yaml document.
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub struct Marker {
     index: usize,
@@ -33,22 +34,26 @@ impl Marker {
         Marker { index, line, col }
     }
 
+    /// Return the index (in bytes) of the marker in the source.
     #[must_use]
     pub fn index(&self) -> usize {
         self.index
     }
 
+    /// Return the line of the marker in the source.
     #[must_use]
     pub fn line(&self) -> usize {
         self.line
     }
 
+    /// Return the column of the marker in the source.
     #[must_use]
     pub fn col(&self) -> usize {
         self.col
     }
 }
 
+/// An error that occured while scanning.
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub struct ScanError {
     mark: Marker,
@@ -56,6 +61,7 @@ pub struct ScanError {
 }
 
 impl ScanError {
+    /// Create a new error from a location and an error string.
     #[must_use]
     pub fn new(loc: Marker, info: &str) -> ScanError {
         ScanError {
@@ -64,9 +70,16 @@ impl ScanError {
         }
     }
 
+    /// Return the marker pointing to the error in the source.
     #[must_use]
     pub fn marker(&self) -> &Marker {
         &self.mark
+    }
+
+    /// Return the information string describing the error that happened.
+    #[must_use]
+    pub fn info(&self) -> &str {
+        self.info.as_ref()
     }
 }
 

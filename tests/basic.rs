@@ -52,7 +52,15 @@ scalar
 key: [1, 2]]
 key1:a2
 ";
-    assert!(YamlLoader::load_from_str(s).is_err());
+    let Err(error) = YamlLoader::load_from_str(s) else { panic!() };
+    assert_eq!(
+        error.info(),
+        "mapping values are not allowed in this context"
+    );
+    assert_eq!(
+        error.to_string(),
+        "mapping values are not allowed in this context at line 4 column 4"
+    );
 }
 
 #[test]
