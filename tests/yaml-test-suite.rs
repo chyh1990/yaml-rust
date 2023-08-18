@@ -1,17 +1,14 @@
 use std::fs::{self, DirEntry};
 
-use libtest_mimic::{Arguments, Test, Outcome, run_tests};
+use libtest_mimic::{run_tests, Arguments, Outcome, Test};
 
 use yaml_rust::{
     parser::{Event, EventReceiver, Parser},
-    scanner::{TokenType, TScalarStyle},
-    ScanError,
-    Yaml,
-    YamlLoader,
-    yaml,
+    scanner::{TScalarStyle, TokenType},
+    yaml, ScanError, Yaml, YamlLoader,
 };
 
-type Result<T, E=Box<dyn std::error::Error>> = std::result::Result<T, E>;
+type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 struct YamlTest {
     yaml_visual: String,
@@ -27,7 +24,7 @@ fn main() -> Result<()> {
         arguments.num_threads = Some(1);
     }
     let tests: Vec<Vec<_>> = std::fs::read_dir("tests/yaml-test-suite/src")?
-        .map(|entry| -> Result<_>  {
+        .map(|entry| -> Result<_> {
             let entry = entry?;
             let tests = load_tests_from_file(&entry)?;
             Ok(tests)
@@ -36,18 +33,18 @@ fn main() -> Result<()> {
     let mut tests: Vec<_> = tests.into_iter().flatten().collect();
     tests.sort_by_key(|t| t.name.clone());
 
-    let missing_xfails: Vec<_> = EXPECTED_FAILURES.iter()
+    let missing_xfails: Vec<_> = EXPECTED_FAILURES
+        .iter()
         .filter(|&&test| !tests.iter().any(|t| t.name == test))
         .collect();
     if !missing_xfails.is_empty() {
-        panic!("The following EXPECTED_FAILURES not found during discovery: {:?}", missing_xfails);
+        panic!(
+            "The following EXPECTED_FAILURES not found during discovery: {:?}",
+            missing_xfails
+        );
     }
 
-    run_tests(
-        &arguments,
-        tests,
-        run_yaml_test,
-    ).exit();
+    run_tests(&arguments, tests, run_yaml_test).exit();
 }
 
 fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
@@ -68,14 +65,18 @@ fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
     match (error_text, desc.is_xfail) {
         (None, false) => Outcome::Passed,
         (Some(text), false) => Outcome::Failed { msg: Some(text) },
-        (Some(_), true)  => Outcome::Ignored,
-        (None, true) => Outcome::Failed { msg: Some("expected to fail but passes".into()) },
+        (Some(_), true) => Outcome::Ignored,
+        (None, true) => Outcome::Failed {
+            msg: Some("expected to fail but passes".into()),
+        },
     }
 }
 
 fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
     let file_name = entry.file_name().to_string_lossy().to_string();
-    let test_name = file_name.strip_suffix(".yaml").ok_or("unexpected filename")?;
+    let test_name = file_name
+        .strip_suffix(".yaml")
+        .ok_or("unexpected filename")?;
     let tests = YamlLoader::load_from_str(&fs::read_to_string(&entry.path())?)?;
     let tests = tests[0].as_vec().ok_or("no test list found in file")?;
 
@@ -121,8 +122,7 @@ fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
 
 fn parse_to_events(source: &str) -> Result<Vec<String>, ScanError> {
     let mut reporter = EventReporter::new();
-    Parser::new(source.chars())
-        .load(&mut reporter, true)?;
+    Parser::new(source.chars()).load(&mut reporter, true)?;
     Ok(reporter.events)
 }
 
@@ -132,9 +132,7 @@ struct EventReporter {
 
 impl EventReporter {
     fn new() -> Self {
-        Self {
-            events: vec![],
-        }
+        Self { events: vec![] }
     }
 }
 
@@ -162,8 +160,13 @@ impl EventReceiver for EventReporter {
                     TScalarStyle::Foled => ">",
                     TScalarStyle::Any => unreachable!(),
                 };
-                format!("=VAL{}{} {}{}",
-                    format_index(idx), format_tag(tag), kind, escape_text(text))
+                format!(
+                    "=VAL{}{} {}{}",
+                    format_index(idx),
+                    format_tag(tag),
+                    kind,
+                    escape_text(text)
+                )
             }
             Event::Alias(idx) => format!("=ALI *{}", idx),
             Event::Nothing => return,
@@ -216,13 +219,16 @@ fn events_differ(actual: Vec<String>, expected: &str) -> Option<String> {
                 if act == exp {
                     continue;
                 } else {
-                    Some(format!("line {} differs: expected `{}`, found `{}`", idx, exp, act))
+                    Some(format!(
+                        "line {} differs: expected `{}`, found `{}`",
+                        idx, exp, act
+                    ))
                 }
             }
             (Some(a), None) => Some(format!("extra actual line: {:?}", a)),
             (None, Some(e)) => Some(format!("extra expected line: {:?}", e)),
             (None, None) => None,
-        }
+        };
     }
     unreachable!()
 }
@@ -250,23 +256,30 @@ fn visual_to_raw(yaml: &str) -> String {
 /// Both are things that can be omitted according to spec.
 fn expected_events(expected_tree: &str) -> Vec<String> {
     let mut anchors = vec![];
-    expected_tree.split("\n")
+    expected_tree
+        .split('\n')
         .map(|s| s.trim_start().to_owned())
         .filter(|s| !s.is_empty())
         .map(|mut s| {
             // Anchor name-to-number conversion
-            if let Some(start) = s.find("&") {
-                if s[..start].find(":").is_none() {
-                    let len = s[start..].find(" ").unwrap_or(s[start..].len());
-                    anchors.push(s[start+1..start + len].to_owned());
+            if let Some(start) = s.find('&') {
+                if s[..start].find(':').is_none() {
+                    let len = s[start..].find(' ').unwrap_or(s[start..].len());
+                    anchors.push(s[start + 1..start + len].to_owned());
                     s = s.replace(&s[start..start + len], &format!("&{}", anchors.len()));
                 }
             }
             // Alias nodes name-to-number
             if s.starts_with("=ALI") {
-                let start = s.find("*").unwrap();
-                let name = &s[start + 1 ..];
-                let idx = anchors.iter().enumerate().filter(|(_, v)| v == &name).last().unwrap().0;
+                let start = s.find('*').unwrap();
+                let name = &s[start + 1..];
+                let idx = anchors
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, v)| v == &name)
+                    .last()
+                    .unwrap()
+                    .0;
                 s = s.replace(&s[start..], &format!("*{}", idx + 1));
             }
             // Dropping style information
