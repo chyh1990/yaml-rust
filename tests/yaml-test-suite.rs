@@ -282,6 +282,7 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
         .collect()
 }
 
+#[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be API limited (not enough information on the event stream level)
     // No tag available for SEQ and MAP
@@ -339,10 +340,8 @@ static EXPECTED_FAILURES: &[&str] = &[
     "HWV9",
     "QT73",
     // Unusual characters in anchors/aliases
-    "2SXE", // :
     "8XYN", // emoji!!
     "W5VH", // :@*!$"<foo>:
-    "Y2GN", // : in the middle
     // Flow mapping colon on next line / multiline key in flow mapping
     "4MUZ-00",
     "4MUZ-01",
