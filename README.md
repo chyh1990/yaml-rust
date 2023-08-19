@@ -75,6 +75,12 @@ your objects.
 * `Vec`/`HashMap` access API
 * Low-level YAML events emission
 
+## Security
+
+This library does not try to interpret any type specifiers in a YAML document,
+so there is no risk of, say, instantiating a socket with fields and
+communicating with the outside world just by parsing a YAML document.
+
 ## Specification Compliance
 
 This implementation is fully compatible with the YAML 1.2 specification. In
