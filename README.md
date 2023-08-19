@@ -97,6 +97,12 @@ examples in the specification, except for the following known bugs:
 However, the widely used library `libyaml` also fails to parse these examples,
 so it may not be a huge problem for most users.
 
+## Security
+
+This library does not try to interpret any type specifiers in a YAML document,
+so there is no risk of, say, instantiating a socket with fields and
+communicating with the outside world just by parsing a YAML document.
+
 ## Goals
 
 * Encoder
