@@ -264,11 +264,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             token_available: false,
         }
     }
+
     #[inline]
     pub fn get_error(&self) -> Option<ScanError> {
         self.error.as_ref().map(std::clone::Clone::clone)
     }
 
+    /// Fill `self.buffer` with at least `count` characters.
+    ///
+    /// The characters that are extracted this way are not consumed but only placed in the buffer.
     #[inline]
     fn lookahead(&mut self, count: usize) {
         if self.buffer.len() >= count {
@@ -278,6 +282,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.buffer.push_back(self.rdr.next().unwrap_or('\0'));
         }
     }
+
     #[inline]
     fn skip(&mut self) {
         let c = self.buffer.pop_front().unwrap();
@@ -290,6 +295,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.mark.col += 1;
         }
     }
+
     #[inline]
     fn skip_line(&mut self) {
         if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
@@ -299,31 +305,62 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.skip();
         }
     }
+
+    /// Return the next character in the buffer.
+    ///
+    /// The character is not consumed.
     #[inline]
     fn ch(&self) -> char {
         self.buffer[0]
     }
+
+    /// Look for the next character and return it.
+    ///
+    /// The character is not consumed.
+    /// Equivalent to calling [`Self::lookahead`] and [`Self::ch`].
+    #[inline]
+    fn look_ch(&mut self) -> char {
+        self.lookahead(1);
+        self.ch()
+    }
+
+    /// Consume and return the next character.
+    ///
+    /// Equivalent to calling [`Self::ch`] and [`Self::skip`].
+    #[inline]
+    fn ch_skip(&mut self) -> char {
+        let ret = self.ch();
+        self.skip();
+        ret
+    }
+
+    /// Return whether the next character is `c`.
     #[inline]
     fn ch_is(&self, c: char) -> bool {
         self.buffer[0] == c
     }
+
     #[allow(dead_code)]
     #[inline]
     fn eof(&self) -> bool {
         self.ch_is('\0')
     }
+
     #[inline]
     pub fn stream_started(&self) -> bool {
         self.stream_start_produced
     }
+
     #[inline]
     pub fn stream_ended(&self) -> bool {
         self.stream_end_produced
     }
+
     #[inline]
     pub fn mark(&self) -> Marker {
         self.mark
     }
+
     #[inline]
     fn read_break(&mut self, s: &mut String) {
         if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
@@ -337,6 +374,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             unreachable!();
         }
     }
+
     fn insert_token(&mut self, pos: usize, tok: Token) {
         let old_len = self.tokens.len();
         assert!(pos <= old_len);
@@ -345,9 +383,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.tokens.swap(old_len - i, old_len - i - 1);
         }
     }
+
     fn allow_simple_key(&mut self) {
         self.simple_key_allowed = true;
     }
+
     fn disallow_simple_key(&mut self) {
         self.simple_key_allowed = false;
     }
@@ -736,7 +776,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let start_mark = self.mark;
         let mut handle = String::new();
         let mut suffix;
-        let mut secondary = false;
 
         // Check if the tag is in the canonical form (verbatim).
         self.lookahead(2);
@@ -760,10 +799,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             handle = self.scan_tag_handle(false, &start_mark)?;
             // Check if it is, indeed, handle.
             if handle.len() >= 2 && handle.starts_with('!') && handle.ends_with('!') {
-                if handle == "!!" {
-                    secondary = true;
-                }
-                suffix = self.scan_tag_uri(false, secondary, "", &start_mark)?;
+                // A tag handle starting with "!!" is a secondary tag handle.
+                let is_secondary_handle = handle == "!!";
+                suffix = self.scan_tag_uri(false, is_secondary_handle, "", &start_mark)?;
             } else {
                 suffix = self.scan_tag_uri(false, false, &handle, &start_mark)?;
                 handle = "!".to_owned();
@@ -776,8 +814,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        self.lookahead(1);
-        if is_blankz(self.ch()) {
+        if is_blankz(self.look_ch()) {
             // XXX: ex 7.2, an empty scalar can follow a secondary tag
             Ok(Token(start_mark, TokenType::Tag(handle, suffix)))
         } else {
@@ -790,28 +827,22 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     fn scan_tag_handle(&mut self, directive: bool, mark: &Marker) -> Result<String, ScanError> {
         let mut string = String::new();
-        self.lookahead(1);
-        if self.ch() != '!' {
+        if self.look_ch() != '!' {
             return Err(ScanError::new(
                 *mark,
                 "while scanning a tag, did not find expected '!'",
             ));
         }
 
-        string.push(self.ch());
-        self.skip();
+        string.push(self.ch_skip());
 
-        self.lookahead(1);
-        while is_alpha(self.ch()) {
-            string.push(self.ch());
-            self.skip();
-            self.lookahead(1);
+        while is_alpha(self.look_ch()) {
+            string.push(self.ch_skip());
         }
 
         // Check if the trailing character is '!' and copy it.
         if self.ch() == '!' {
-            string.push(self.ch());
-            self.skip();
+            string.push(self.ch_skip());
         } else if directive && string != "!" {
             // It's either the '!' tag or not really a tag handle.  If it's a %TAG
             // directive, it's an error.  If it's a tag token, it must be a part of
@@ -840,7 +871,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             string.extend(head.chars().skip(1));
         }
 
-        self.lookahead(1);
         /*
          * The set of characters that may appear in URI is as follows:
          *
@@ -848,7 +878,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
          *      '=', '+', '$', ',', '.', '!', '~', '*', '\'', '(', ')', '[', ']',
          *      '%'.
          */
-        while match self.ch() {
+        while match self.look_ch() {
             ';' | '/' | '?' | ':' | '@' | '&' => true,
             '=' | '+' | '$' | ',' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' | '[' | ']' => true,
             '%' => true,
@@ -864,7 +894,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
 
             length += 1;
-            self.lookahead(1);
         }
 
         if length == 0 {

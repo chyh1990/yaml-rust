@@ -299,7 +299,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be API limited (not enough information on the event stream level)
     // No tag available for SEQ and MAP
-    "2XXW",
     "35KP",
     "57H4",
     "6JWB",
