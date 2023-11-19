@@ -203,11 +203,7 @@ fn escape_text(text: &str) -> String {
 
 fn format_tag(tag: &Option<Tag>) -> String {
     if let Some(tag) = tag {
-        let ns = match tag.handle.as_str() {
-            "!!" => "tag:yaml.org,2002:", // Wrong if this ns is overridden
-            other => other,
-        };
-        format!(" <{}{}>", ns, tag.suffix)
+        format!(" <{}{}>", tag.handle, tag.suffix)
     } else {
         "".into()
     }
