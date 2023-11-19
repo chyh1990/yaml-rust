@@ -948,14 +948,20 @@ impl<T: Iterator<Item = char>> Parser<T> {
     /// Resolve a tag from the handle and the suffix.
     fn resolve_tag(&self, mark: Marker, handle: &str, suffix: String) -> Result<Tag, ScanError> {
         if handle == "!!" {
-            // "!!" is a shorthand for "tag:yaml.org,2002:".
-            Ok(Tag {
-                handle: "tag:yaml.org,2002:".to_string(),
-                suffix,
-            })
+            // "!!" is a shorthand for "tag:yaml.org,2002:". However, that default can be
+            // overridden.
+            match self.tags.get("!!") {
+                Some(prefix) => Ok(Tag {
+                    handle: prefix.to_string(),
+                    suffix,
+                }),
+                None => Ok(Tag {
+                    handle: "tag:yaml.org,2002:".to_string(),
+                    suffix,
+                }),
+            }
         } else if handle.is_empty() && suffix == "!" {
-            // "!" is a shorthand for "whatever would be the default". However, that
-            // default can be overridden.
+            // "!" introduces a local tag. Local tags may have their prefix overridden.
             match self.tags.get("") {
                 Some(prefix) => Ok(Tag {
                     handle: prefix.to_string(),
