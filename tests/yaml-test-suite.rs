@@ -366,7 +366,6 @@ static EXPECTED_FAILURES: &[&str] = &[
     "9HCY", // Directive after content
     "EB22", // Directive after content
     "MUS6-01", // no document end marker?
-    "QLJ7", // TAG directives should not be inherited between documents
     "RHX7", // no document end marker
     "SF5V", // duplicate directive
     "W4TN", // scalar confused as directive

@@ -510,7 +510,6 @@ impl<T: Iterator<Item = char>> Parser<T> {
             self.tags = tags;
             self.skip();
         }
-        // TODO tag directive
         Ok(())
     }
 
@@ -557,7 +556,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             Token(mark, _) => mark,
         };
 
-        // TODO tag handling
+        self.tags.clear();
         self.state = State::DocumentStart;
         Ok((Event::DocumentEnd, marker))
     }
