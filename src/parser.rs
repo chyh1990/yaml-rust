@@ -468,7 +468,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 | TokenType::DocumentStart,
             ) => {
                 // explicit document
-                self._explicit_document_start()
+                self.explicit_document_start()
             }
             Token(mark, _) if implicit => {
                 self.parser_process_directives()?;
@@ -478,7 +478,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             }
             _ => {
                 // explicit document
-                self._explicit_document_start()
+                self.explicit_document_start()
             }
         }
     }
@@ -504,7 +504,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         Ok(())
     }
 
-    fn _explicit_document_start(&mut self) -> ParseResult {
+    fn explicit_document_start(&mut self) -> ParseResult {
         self.parser_process_directives()?;
         match *self.peek_token()? {
             Token(mark, TokenType::DocumentStart) => {
