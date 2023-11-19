@@ -115,8 +115,7 @@ impl MarkedEventReceiver for YamlLoader {
                     ref suffix,
                 }) = tag
                 {
-                    // XXX tag:yaml.org,2002:
-                    if handle == "!!" {
+                    if handle == "tag:yaml.org,2002:" {
                         match suffix.as_ref() {
                             "bool" => {
                                 // "true" or "false"

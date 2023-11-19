@@ -302,16 +302,7 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be API limited (not enough information on the event stream level)
-    // No tag available for SEQ and MAP
-    "C4HZ",
     // Cannot resolve tag namespaces
-    "5TYM",
-    "6CK3",
-    "6WLZ",
-    "9WXW",
-    "CC74",
-    "U3C3",
-    "Z9M4",
     "P76L", // overriding the `!!` namespace!
 
     // These seem to be plain bugs

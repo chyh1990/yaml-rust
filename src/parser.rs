@@ -100,6 +100,10 @@ pub struct Parser<T> {
     current: Option<(Event, Marker)>,
     anchors: HashMap<String, usize>,
     anchor_id: usize,
+    /// The tag directives (`%TAG`) the parser has encountered.
+    ///
+    /// Key is the handle, and value is the prefix.
+    tags: HashMap<String, String>,
 }
 
 /// Trait to be implemented in order to use the low-level parsing API.
@@ -205,6 +209,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             anchors: HashMap::new(),
             // valid anchor_id starts from 1
             anchor_id: 1,
+            tags: HashMap::new(),
         }
     }
 
@@ -485,19 +490,24 @@ impl<T: Iterator<Item = char>> Parser<T> {
 
     fn parser_process_directives(&mut self) -> Result<(), ScanError> {
         loop {
-            match self.peek_token()?.1 {
-                TokenType::VersionDirective(_, _) => {
+            let mut tags = HashMap::new();
+            match self.peek_token()? {
+                Token(_, TokenType::VersionDirective(_, _)) => {
                     // XXX parsing with warning according to spec
                     //if major != 1 || minor > 2 {
                     //    return Err(ScanError::new(tok.0,
                     //        "found incompatible YAML document"));
                     //}
                 }
-                TokenType::TagDirective(..) => {
-                    // TODO add tag directive
+                Token(mark, TokenType::TagDirective(handle, prefix)) => {
+                    if tags.contains_key(handle) {
+                        return Err(ScanError::new(*mark, "the TAG directive must only be given at most once per handle in the same document"));
+                    }
+                    tags.insert(handle.to_string(), prefix.to_string());
                 }
                 _ => break,
             }
+            self.tags = tags;
             self.skip();
         }
         // TODO tag directive
@@ -589,7 +599,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
                     anchor_id = self.register_anchor(name, &mark);
                     if let TokenType::Tag(..) = self.peek_token()?.1 {
                         if let TokenType::Tag(handle, suffix) = self.fetch_token().1 {
-                            tag = Some(Tag { handle, suffix });
+                            tag = Some(self.resolve_tag(mark, &handle, suffix)?);
                         } else {
                             unreachable!()
                         }
@@ -598,9 +608,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
                     unreachable!()
                 }
             }
-            Token(_, TokenType::Tag(..)) => {
+            Token(mark, TokenType::Tag(..)) => {
                 if let TokenType::Tag(handle, suffix) = self.fetch_token().1 {
-                    tag = Some(Tag { handle, suffix });
+                    tag = Some(self.resolve_tag(mark, &handle, suffix)?);
                     if let TokenType::Anchor(_) = &self.peek_token()?.1 {
                         if let Token(mark, TokenType::Anchor(name)) = self.fetch_token() {
                             anchor_id = self.register_anchor(name, &mark);
@@ -934,6 +944,52 @@ impl<T: Iterator<Item = char>> Parser<T> {
     fn flow_sequence_entry_mapping_end(&mut self) -> ParseResult {
         self.state = State::FlowSequenceEntry;
         Ok((Event::MappingEnd, self.scanner.mark()))
+    }
+
+    /// Resolve a tag from the handle and the suffix.
+    fn resolve_tag(&self, mark: Marker, handle: &str, suffix: String) -> Result<Tag, ScanError> {
+        if handle == "!!" {
+            // "!!" is a shorthand for "tag:yaml.org,2002:".
+            Ok(Tag {
+                handle: "tag:yaml.org,2002:".to_string(),
+                suffix,
+            })
+        } else if handle.is_empty() && suffix == "!" {
+            // "!" is a shorthand for "whatever would be the default". However, that
+            // default can be overridden.
+            match self.tags.get("") {
+                Some(prefix) => Ok(Tag {
+                    handle: prefix.to_string(),
+                    suffix,
+                }),
+                None => Ok(Tag {
+                    handle: String::new(),
+                    suffix,
+                }),
+            }
+        } else {
+            // Lookup handle in our tag directives.
+            let prefix = self.tags.get(handle);
+            if let Some(prefix) = prefix {
+                Ok(Tag {
+                    handle: prefix.to_string(),
+                    suffix,
+                })
+            } else {
+                // Otherwise, it may be a local handle. With a local handle, the handle is set to
+                // "!" and the suffix to whatever follows it ("!foo" -> ("!", "foo")).
+                // If the handle is of the form "!foo!", this cannot be a local handle and we need
+                // to error.
+                if handle.len() >= 2 && handle.starts_with('!') && handle.ends_with('!') {
+                    Err(ScanError::new(mark, "the handle wasn't declared"))
+                } else {
+                    Ok(Tag {
+                        handle: handle.to_string(),
+                        suffix,
+                    })
+                }
+            }
+        }
     }
 }
 
