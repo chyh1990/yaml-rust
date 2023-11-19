@@ -298,11 +298,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be plain bugs
-    // Leading TAB in literal scalars
-    "96NN-00",
-    "96NN-01",
-    "R4YG",
-    "Y79Y-01",
     // TAB as start of plain scalar instead of whitespace
     "6BCT",
     "6CA3",

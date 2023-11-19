@@ -378,6 +378,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.mark
     }
 
+    // Read and consume a line break (either `\r`, `\n` or `\r\n`).
+    //
+    // A `\n` is pushed into `s`.
+    //
+    // # Panics
+    // If the next characters do not correspond to a line break.
     #[inline]
     fn read_break(&mut self, s: &mut String) {
         if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
@@ -1222,7 +1228,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
         // Scan the leading line breaks and determine the indentation level if needed.
-        self.block_scalar_breaks(&mut indent, &mut trailing_breaks)?;
+        self.block_scalar_breaks(&mut indent, &mut trailing_breaks);
 
         self.lookahead(1);
 
@@ -1260,7 +1266,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.read_break(&mut leading_break);
 
             // Eat the following indentation spaces and line breaks.
-            self.block_scalar_breaks(&mut indent, &mut trailing_breaks)?;
+            self.block_scalar_breaks(&mut indent, &mut trailing_breaks);
         }
 
         // Chomp the tail.
@@ -1285,44 +1291,32 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    fn block_scalar_breaks(&mut self, indent: &mut usize, breaks: &mut String) -> ScanResult {
+    fn block_scalar_breaks(&mut self, indent: &mut usize, breaks: &mut String) {
         let mut max_indent = 0;
+        // Consume all empty lines.
         loop {
-            self.lookahead(1);
-            while (*indent == 0 || self.mark.col < *indent) && self.buffer[0] == ' ' {
+            // Consume all spaces. Tabs cannot be used as indentation.
+            while (*indent == 0 || self.mark.col < *indent) && self.look_ch() == ' ' {
                 self.skip();
-                self.lookahead(1);
             }
 
             if self.mark.col > max_indent {
                 max_indent = self.mark.col;
             }
 
-            // Check for a tab character messing the indentation.
-            if (*indent == 0 || self.mark.col < *indent) && self.buffer[0] == '\t' {
-                return Err(ScanError::new(self.mark,
-                        "while scanning a block scalar, found a tab character where an indentation space is expected"));
-            }
-
-            if !is_break(self.ch()) {
+            // If our current line is not empty, break out of the loop.
+            if !is_break(self.look_ch()) {
                 break;
             }
 
-            self.lookahead(2);
             // Consume the line break.
+            self.lookahead(2);
             self.read_break(breaks);
         }
 
         if *indent == 0 {
-            *indent = max_indent;
-            if *indent < (self.indent + 1) as usize {
-                *indent = (self.indent + 1) as usize;
-            }
-            if *indent < 1 {
-                *indent = 1;
-            }
+            *indent = max_indent.max((self.indent + 1) as usize).max(1);
         }
-        Ok(())
     }
 
     fn fetch_flow_scalar(&mut self, single: bool) -> ScanResult {
