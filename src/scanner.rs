@@ -1780,7 +1780,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    fn save_simple_key(&mut self) -> Result<(), ScanError> {
+    fn save_simple_key(&mut self) -> ScanResult {
         let required = self.flow_level > 0 && self.indent == (self.mark.col as isize);
         if self.simple_key_allowed {
             let mut sk = SimpleKey::new(self.mark);
