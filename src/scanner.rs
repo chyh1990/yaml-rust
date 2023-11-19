@@ -109,26 +109,43 @@ impl fmt::Display for ScanError {
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub enum TokenType {
     NoToken,
+    /// The start of the stream. Sent first, before even [`DocumentStart`].
     StreamStart(TEncoding),
+    /// The end of the stream, EOF.
     StreamEnd,
-    /// major, minor
-    VersionDirective(u32, u32),
-    /// handle, prefix
-    TagDirective(String, String),
+    VersionDirective(
+        /// Major
+        u32,
+        /// Minor
+        u32,
+    ),
+    TagDirective(
+        /// Handle
+        String,
+        /// Prefix
+        String,
+    ),
+    /// The start of a YAML document (`---`).
     DocumentStart,
+    /// The end of a YAML document (`...`).
     DocumentEnd,
     BlockSequenceStart,
     BlockMappingStart,
     BlockEnd,
+    /// Start of an inline array (`[ a, b ]`).
     FlowSequenceStart,
+    /// End of an inline array.
     FlowSequenceEnd,
+    /// Start of an inline mapping (`{ a: b, c: d }`).
     FlowMappingStart,
+    /// End of an inline mapping.
     FlowMappingEnd,
     BlockEntry,
     FlowEntry,
     Key,
     Value,
     Alias(String),
+    /// A YAML anchor (`&`/`*`).
     Anchor(String),
     /// handle, suffix
     Tag(String, String),

@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use crate::parser::{Event, MarkedEventReceiver, Parser};
+use crate::parser::{Event, MarkedEventReceiver, Parser, Tag};
 use crate::scanner::{Marker, ScanError, TScalarStyle, TokenType};
 use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
@@ -98,7 +98,7 @@ impl MarkedEventReceiver for YamlLoader {
                 let node = self.doc_stack.pop().unwrap();
                 self.insert_new_node(node);
             }
-            Event::MappingStart(aid) => {
+            Event::MappingStart(aid, _) => {
                 self.doc_stack.push((Yaml::Hash(Hash::new()), aid));
                 self.key_stack.push(Yaml::BadValue);
             }
@@ -110,7 +110,7 @@ impl MarkedEventReceiver for YamlLoader {
             Event::Scalar(v, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v)
-                } else if let Some(TokenType::Tag(ref handle, ref suffix)) = tag {
+                } else if let Some(Tag { ref handle, ref suffix }) = tag {
                     // XXX tag:yaml.org,2002:
                     if handle == "!!" {
                         match suffix.as_ref() {

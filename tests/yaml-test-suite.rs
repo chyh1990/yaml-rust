@@ -3,8 +3,8 @@ use std::fs::{self, DirEntry};
 use libtest_mimic::{run_tests, Arguments, Outcome, Test};
 
 use yaml_rust::{
-    parser::{Event, EventReceiver, Parser},
-    scanner::{TScalarStyle, TokenType},
+    parser::{Event, EventReceiver, Parser, Tag},
+    scanner::{TScalarStyle},
     yaml, ScanError, Yaml, YamlLoader,
 };
 
@@ -148,7 +148,9 @@ impl EventReceiver for EventReporter {
             Event::SequenceStart(idx) => format!("+SEQ{}", format_index(idx)),
             Event::SequenceEnd => "-SEQ".into(),
 
-            Event::MappingStart(idx) => format!("+MAP{}", format_index(idx)),
+            Event::MappingStart(idx, tag) => {
+                format!("+MAP{}{}", format_index(idx), format_tag(&tag))
+            }
             Event::MappingEnd => "-MAP".into(),
 
             Event::Scalar(ref text, style, idx, ref tag) => {
@@ -197,13 +199,13 @@ fn escape_text(text: &str) -> String {
     text
 }
 
-fn format_tag(tag: &Option<TokenType>) -> String {
-    if let Some(TokenType::Tag(ns, tag)) = tag {
-        let ns = match ns.as_str() {
+fn format_tag(tag: &Option<Tag>) -> String {
+    if let Some(tag) = tag {
+        let ns = match tag.handle.as_str() {
             "!!" => "tag:yaml.org,2002:", // Wrong if this ns is overridden
             other => other,
         };
-        format!(" <{}{}>", ns, tag)
+        format!(" <{}{}>", ns, tag.suffix)
     } else {
         "".into()
     }
@@ -302,13 +304,9 @@ static EXPECTED_FAILURES: &[&str] = &[
     "35KP",
     "57H4",
     "6JWB",
-    "735Y",
-    "9KAX",
-    "BU8L",
     "C4HZ",
     "EHF6",
     "J7PZ",
-    "UGM3",
     // Cannot resolve tag namespaces
     "5TYM",
     "6CK3",

@@ -51,7 +51,7 @@ pub enum Event {
         usize,
     ),
     /// Value, style, anchor_id, tag
-    Scalar(String, TScalarStyle, usize, Option<TokenType>),
+    Scalar(String, TScalarStyle, usize, Option<Tag>),
     SequenceStart(
         /// The anchor ID of the start of the squence.
         usize,
@@ -60,8 +60,19 @@ pub enum Event {
     MappingStart(
         /// The anchor ID of the start of the mapping.
         usize,
+        /// An optional tag
+        Option<Tag>,
     ),
     MappingEnd,
+}
+
+/// A YAML tag.
+#[derive(Clone, PartialEq, Debug, Eq)]
+pub struct Tag {
+    /// Handle of the tag (`!` included).
+    pub handle: String,
+    /// The suffix of the tag.
+    pub suffix: String,
 }
 
 impl Event {
@@ -72,7 +83,7 @@ impl Event {
     }
 
     /// Create an empty scalar with the given anchor.
-    fn empty_scalar_with_anchor(anchor: usize, tag: Option<TokenType>) -> Event {
+    fn empty_scalar_with_anchor(anchor: usize, tag: Option<Tag>) -> Event {
         Event::Scalar(String::new(), TScalarStyle::Plain, anchor, tag)
     }
 }
@@ -340,7 +351,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 recv.on_event(first_ev, mark);
                 self.load_sequence(recv)
             }
-            Event::MappingStart(_) => {
+            Event::MappingStart(..) => {
                 recv.on_event(first_ev, mark);
                 self.load_mapping(recv)
             }
@@ -575,8 +586,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 if let Token(mark, TokenType::Anchor(name)) = self.fetch_token() {
                     anchor_id = self.register_anchor(name, &mark);
                     if let TokenType::Tag(..) = self.peek_token()?.1 {
-                        if let tg @ TokenType::Tag(..) = self.fetch_token().1 {
-                            tag = Some(tg);
+                        if let TokenType::Tag(handle, suffix) = self.fetch_token().1 {
+                            tag = Some(Tag { handle, suffix });
                         } else {
                             unreachable!()
                         }
@@ -586,9 +597,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 }
             }
             Token(_, TokenType::Tag(..)) => {
-                if let tg @ TokenType::Tag(..) = self.fetch_token().1 {
-                    tag = Some(tg);
-                    if let TokenType::Anchor(_) = self.peek_token()?.1 {
+                if let TokenType::Tag(handle, suffix) = self.fetch_token().1 {
+                    tag = Some(Tag { handle, suffix });
+                    if let TokenType::Anchor(_) = &self.peek_token()?.1 {
                         if let Token(mark, TokenType::Anchor(name)) = self.fetch_token() {
                             anchor_id = self.register_anchor(name, &mark);
                         } else {
@@ -620,7 +631,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             }
             Token(mark, TokenType::FlowMappingStart) => {
                 self.state = State::FlowMappingFirstKey;
-                Ok((Event::MappingStart(anchor_id), mark))
+                Ok((Event::MappingStart(anchor_id, tag), mark))
             }
             Token(mark, TokenType::BlockSequenceStart) if block => {
                 self.state = State::BlockSequenceFirstEntry;
@@ -628,7 +639,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             }
             Token(mark, TokenType::BlockMappingStart) if block => {
                 self.state = State::BlockMappingFirstKey;
-                Ok((Event::MappingStart(anchor_id), mark))
+                Ok((Event::MappingStart(anchor_id, tag), mark))
             }
             // ex 7.2, an empty scalar can follow a secondary tag
             Token(mark, _) if tag.is_some() || anchor_id > 0 => {
@@ -819,7 +830,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             Token(mark, TokenType::Key) => {
                 self.state = State::FlowSequenceEntryMappingKey;
                 self.skip();
-                Ok((Event::MappingStart(0), mark))
+                Ok((Event::MappingStart(0, None), mark))
             }
             _ => {
                 self.push_state(State::FlowSequenceEntry);
