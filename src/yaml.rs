@@ -91,7 +91,7 @@ impl MarkedEventReceiver for YamlLoader {
                     _ => unreachable!(),
                 }
             }
-            Event::SequenceStart(aid) => {
+            Event::SequenceStart(aid, _) => {
                 self.doc_stack.push((Yaml::Array(Vec::new()), aid));
             }
             Event::SequenceEnd => {
@@ -110,7 +110,11 @@ impl MarkedEventReceiver for YamlLoader {
             Event::Scalar(v, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
                     Yaml::String(v)
-                } else if let Some(Tag { ref handle, ref suffix }) = tag {
+                } else if let Some(Tag {
+                    ref handle,
+                    ref suffix,
+                }) = tag
+                {
                     // XXX tag:yaml.org,2002:
                     if handle == "!!" {
                         match suffix.as_ref() {

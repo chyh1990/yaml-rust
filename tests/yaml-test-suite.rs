@@ -4,7 +4,7 @@ use libtest_mimic::{run_tests, Arguments, Outcome, Test};
 
 use yaml_rust::{
     parser::{Event, EventReceiver, Parser, Tag},
-    scanner::{TScalarStyle},
+    scanner::TScalarStyle,
     yaml, ScanError, Yaml, YamlLoader,
 };
 
@@ -145,7 +145,9 @@ impl EventReceiver for EventReporter {
             Event::DocumentStart => "+DOC".into(),
             Event::DocumentEnd => "-DOC".into(),
 
-            Event::SequenceStart(idx) => format!("+SEQ{}", format_index(idx)),
+            Event::SequenceStart(idx, tag) => {
+                format!("+SEQ{}{}", format_index(idx), format_tag(&tag))
+            }
             Event::SequenceEnd => "-SEQ".into(),
 
             Event::MappingStart(idx, tag) => {
@@ -301,12 +303,7 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be API limited (not enough information on the event stream level)
     // No tag available for SEQ and MAP
-    "35KP",
-    "57H4",
-    "6JWB",
     "C4HZ",
-    "EHF6",
-    "J7PZ",
     // Cannot resolve tag namespaces
     "5TYM",
     "6CK3",

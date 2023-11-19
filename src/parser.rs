@@ -55,6 +55,8 @@ pub enum Event {
     SequenceStart(
         /// The anchor ID of the start of the squence.
         usize,
+        /// An optional tag
+        Option<Tag>,
     ),
     SequenceEnd,
     MappingStart(
@@ -347,7 +349,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 recv.on_event(first_ev, mark);
                 Ok(())
             }
-            Event::SequenceStart(_) => {
+            Event::SequenceStart(..) => {
                 recv.on_event(first_ev, mark);
                 self.load_sequence(recv)
             }
@@ -615,7 +617,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         match *self.peek_token()? {
             Token(mark, TokenType::BlockEntry) if indentless_sequence => {
                 self.state = State::IndentlessSequenceEntry;
-                Ok((Event::SequenceStart(anchor_id), mark))
+                Ok((Event::SequenceStart(anchor_id, tag), mark))
             }
             Token(_, TokenType::Scalar(..)) => {
                 self.pop_state();
@@ -627,7 +629,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             }
             Token(mark, TokenType::FlowSequenceStart) => {
                 self.state = State::FlowSequenceFirstEntry;
-                Ok((Event::SequenceStart(anchor_id), mark))
+                Ok((Event::SequenceStart(anchor_id, tag), mark))
             }
             Token(mark, TokenType::FlowMappingStart) => {
                 self.state = State::FlowMappingFirstKey;
@@ -635,7 +637,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             }
             Token(mark, TokenType::BlockSequenceStart) if block => {
                 self.state = State::BlockSequenceFirstEntry;
-                Ok((Event::SequenceStart(anchor_id), mark))
+                Ok((Event::SequenceStart(anchor_id, tag), mark))
             }
             Token(mark, TokenType::BlockMappingStart) if block => {
                 self.state = State::BlockMappingFirstKey;
