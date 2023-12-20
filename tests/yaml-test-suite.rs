@@ -52,7 +52,7 @@ fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
     let actual_events = parse_to_events(&desc.yaml);
     let events_diff = actual_events.map(|events| events_differ(events, &desc.expected_events));
     let mut error_text = match (events_diff, desc.expected_error) {
-        (Ok(_), true) => Some("no error when expected".into()),
+        (Ok(x), true) => Some(format!("no error when expected: {x:#?}")),
         (Err(_), true) => None,
         (Err(e), false) => Some(format!("unexpected error {:?}", e)),
         (Ok(Some(diff)), false) => Some(format!("events differ: {}", diff)),
@@ -299,15 +299,12 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be plain bugs
     // TAB as start of plain scalar instead of whitespace
-    "6CA3",
     "DK95-00",
-    "Q5MG",
     "Y79Y-06",
     "Y79Y-03", // unexpected pass
     "Y79Y-04", // unexpected pass
     "Y79Y-05", // unexpected pass
     // TABs in whitespace-only lines
-    "DK95-03",
     "DK95-04",
     // TABs after marker ? or : (space required?)
     "Y79Y-07",

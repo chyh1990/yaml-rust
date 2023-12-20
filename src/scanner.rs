@@ -129,8 +129,15 @@ pub enum TokenType {
     DocumentStart,
     /// The end of a YAML document (`...`).
     DocumentEnd,
+    /// The start of a sequence block.
+    ///
+    /// Sequence blocks are arrays starting with a `-`.
     BlockSequenceStart,
+    /// The start of a sequence mapping.
+    ///
+    /// Sequence mappings are "dictionaries" with "key: value" entries.
     BlockMappingStart,
+    /// End of the corresponding `BlockSequenceStart` or `BlockMappingStart`.
     BlockEnd,
     /// Start of an inline array (`[ a, b ]`).
     FlowSequenceStart,
@@ -186,6 +193,9 @@ pub struct Scanner<T> {
     stream_start_produced: bool,
     stream_end_produced: bool,
     adjacent_value_allowed_at: usize,
+    /// Whether a simple key could potentially start at the current position.
+    ///
+    /// Simple keys are the opposite of complex keys which are keys starting with `?`.
     simple_key_allowed: bool,
     simple_keys: Vec<SimpleKey>,
     indent: isize,
@@ -427,13 +437,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Insert a token at the given position.
     fn insert_token(&mut self, pos: usize, tok: Token) {
         let old_len = self.tokens.len();
         assert!(pos <= old_len);
-        self.tokens.push_back(tok);
-        for i in 0..old_len - pos {
-            self.tokens.swap(old_len - i, old_len - i - 1);
-        }
+        self.tokens.insert(pos, tok);
     }
 
     fn allow_simple_key(&mut self) {
@@ -550,10 +558,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     pub fn fetch_more_tokens(&mut self) -> ScanResult {
         let mut need_more;
         loop {
-            need_more = false;
             if self.tokens.is_empty() {
                 need_more = true;
             } else {
+                need_more = false;
                 self.stale_simple_keys()?;
                 for sk in &self.simple_keys {
                     if sk.possible && sk.token_number == self.tokens_parsed {
@@ -600,9 +608,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     return Err(ScanError::new(
                         self.mark,
                         "tabs disallowed within this context (block indentation)",
-                    ))
+                    ));
                 }
-                '\t' if self.flow_level > 0 || !self.simple_key_allowed => self.skip(),
+                '\t' => self.skip(),
                 '\n' | '\r' => {
                     self.lookahead(2);
                     self.skip_line();
@@ -1770,6 +1778,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Add an indentation level to the stack with the given block token, if needed.
+    ///
+    /// An indentation level is added only if:
+    ///   - We are not in a flow-style construct (which don't have indentation per-se).
+    ///   - The current column is further indented than the last indent we have registered.
     fn roll_indent(&mut self, col: usize, number: Option<usize>, tok: TokenType, mark: Marker) {
         if self.flow_level > 0 {
             return;
@@ -1786,6 +1799,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Pop indentation levels from the stack as much as needed.
+    ///
+    /// Indentation levels are popped from the stack while they are further indented than `col`.
+    /// If we are in a flow-style construct (which don't have indentation per-se), this function
+    /// does nothing.
     fn unroll_indent(&mut self, col: isize) {
         if self.flow_level > 0 {
             return;

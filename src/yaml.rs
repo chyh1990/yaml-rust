@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use crate::parser::{Event, MarkedEventReceiver, Parser, Tag};
-use crate::scanner::{Marker, ScanError, TScalarStyle, TokenType};
+use crate::scanner::{Marker, ScanError, TScalarStyle};
 use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
 use std::mem;
