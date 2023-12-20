@@ -1585,7 +1585,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let mut leading_break = String::new();
         let mut trailing_breaks = String::new();
         let mut whitespaces = String::new();
-        let mut leading_blanks = false;
+        let mut leading_blanks = true;
 
         loop {
             /* Check for a document indicator. */
@@ -1647,9 +1647,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             if !(is_blank(self.ch()) || is_break(self.ch())) {
                 break;
             }
-            self.lookahead(1);
 
-            while is_blank(self.ch()) || is_break(self.ch()) {
+            while is_blank(self.look_ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
                     if leading_blanks && (self.mark.col as isize) < indent && self.ch() == '\t' {
                         return Err(ScanError::new(
@@ -1673,7 +1672,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         leading_blanks = true;
                     }
                 }
-                self.lookahead(1);
             }
 
             // check indentation level
