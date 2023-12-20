@@ -305,7 +305,6 @@ static EXPECTED_FAILURES: &[&str] = &[
     "DK95-00",
     "Q5MG",
     "Y79Y-06",
-    "4EJS", // unexpected pass
     "Y79Y-03", // unexpected pass
     "Y79Y-04", // unexpected pass
     "Y79Y-05", // unexpected pass

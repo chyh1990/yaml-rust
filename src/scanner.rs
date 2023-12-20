@@ -193,6 +193,8 @@ pub struct Scanner<T> {
     flow_level: u8,
     tokens_parsed: usize,
     token_available: bool,
+    /// Whether all characters encountered since the last newline were whitespace.
+    leading_whitespace: bool,
 }
 
 impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
@@ -298,6 +300,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             flow_level: 0,
             tokens_parsed: 0,
             token_available: false,
+            leading_whitespace: true,
         }
     }
 
@@ -319,19 +322,26 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Consume the next character. Remove from buffer and update mark.
     #[inline]
     fn skip(&mut self) {
         let c = self.buffer.pop_front().unwrap();
 
         self.mark.index += 1;
         if c == '\n' {
+            self.leading_whitespace = true;
             self.mark.line += 1;
             self.mark.col = 0;
         } else {
+            // TODO(ethiraric, 20/12/2023): change to `self.leading_whitespace &= is_blank(c)`?
+            if self.leading_whitespace && !is_blank(c) {
+                self.leading_whitespace = false;
+            }
             self.mark.col += 1;
         }
     }
 
+    /// Consume a linebreak (either CR, LF or CRLF), if any. Do nothing if there's none.
     #[inline]
     fn skip_line(&mut self) {
         if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
@@ -442,7 +452,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.fetch_stream_start();
             return Ok(());
         }
-        self.skip_to_next_token();
+        self.skip_to_next_token()?;
 
         self.stale_simple_keys()?;
 
@@ -577,12 +587,21 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
-    fn skip_to_next_token(&mut self) {
+    fn skip_to_next_token(&mut self) -> ScanResult {
         loop {
-            self.lookahead(1);
             // TODO(chenyh) BOM
-            match self.ch() {
+            match self.look_ch() {
                 ' ' => self.skip(),
+                // Tabs may not be used as indentation.
+                // "Indentation" only exists as long as a block is started, but does not exist
+                // inside of flow-style constructs. Tabs are allowed as part of leaading
+                // whitespaces outside of indentation.
+                '\t' if self.is_within_block() && self.leading_whitespace => {
+                    return Err(ScanError::new(
+                        self.mark,
+                        "tabs disallowed within this context (block indentation)",
+                    ))
+                }
                 '\t' if self.flow_level > 0 || !self.simple_key_allowed => self.skip(),
                 '\n' | '\r' => {
                     self.lookahead(2);
@@ -600,6 +619,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 _ => break,
             }
         }
+        Ok(())
     }
 
     fn fetch_stream_start(&mut self) {
@@ -1638,12 +1658,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         ));
                     }
 
-                    if leading_blanks {
-                        self.skip();
-                    } else {
+                    if !leading_blanks {
                         whitespaces.push(self.ch());
-                        self.skip();
                     }
+                    self.skip();
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break
@@ -1804,5 +1822,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         last.possible = false;
         Ok(())
+    }
+
+    /// Return whether the scanner is inside a block but outside of a flow sequence.
+    fn is_within_block(&self) -> bool {
+        !self.indents.is_empty() && self.flow_level == 0
     }
 }
