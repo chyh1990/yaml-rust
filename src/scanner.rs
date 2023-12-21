@@ -1274,8 +1274,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 increment
             }
         }
+
         // Scan the leading line breaks and determine the indentation level if needed.
-        self.block_scalar_breaks(&mut indent, &mut trailing_breaks);
+        if indent == 0 {
+            self.skip_block_scalar_first_line_indent(&mut indent, &mut trailing_breaks);
+        } else {
+            self.skip_block_scalar_indent(indent, &mut trailing_breaks);
+        }
 
         self.lookahead(1);
 
@@ -1313,7 +1318,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.read_break(&mut leading_break);
 
             // Eat the following indentation spaces and line breaks.
-            self.block_scalar_breaks(&mut indent, &mut trailing_breaks);
+            self.skip_block_scalar_indent(indent, &mut trailing_breaks);
         }
 
         // Chomp the tail.
@@ -1338,12 +1343,34 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    fn block_scalar_breaks(&mut self, indent: &mut usize, breaks: &mut String) {
-        let mut max_indent = 0;
-        // Consume all empty lines.
+    /// Skip the block scalar indentation and empty lines.
+    fn skip_block_scalar_indent(&mut self, indent: usize, breaks: &mut String) {
         loop {
             // Consume all spaces. Tabs cannot be used as indentation.
-            while (*indent == 0 || self.mark.col < *indent) && self.look_ch() == ' ' {
+            while self.mark.col < indent && self.look_ch() == ' ' {
+                self.skip();
+            }
+
+            // If our current line is empty, skip over the break and continue looping.
+            if is_break(self.look_ch()) {
+                self.lookahead(2);
+                self.read_break(breaks);
+            } else {
+                // Otherwise, we have a content line. Return control.
+                break;
+            }
+        }
+    }
+
+    /// Determine the indentation level for a block scalar from the first line of its contents.
+    ///
+    /// The function skips over whitespace-only lines and sets `indent` to the the longest
+    /// whitespace line that was encountered.
+    fn skip_block_scalar_first_line_indent(&mut self, indent: &mut usize, breaks: &mut String) {
+        let mut max_indent = 0;
+        loop {
+            // Consume all spaces. Tabs cannot be used as indentation.
+            while self.look_ch() == ' ' {
                 self.skip();
             }
 
@@ -1351,19 +1378,17 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 max_indent = self.mark.col;
             }
 
-            // If our current line is not empty, break out of the loop.
-            if !is_break(self.look_ch()) {
+            if is_break(self.look_ch()) {
+                // If our current line is empty, skip over the break and continue looping.
+                self.lookahead(2);
+                self.read_break(breaks);
+            } else {
+                // Otherwise, we have a content line. Return control.
                 break;
             }
-
-            // Consume the line break.
-            self.lookahead(2);
-            self.read_break(breaks);
         }
 
-        if *indent == 0 {
-            *indent = max_indent.max((self.indent + 1) as usize).max(1);
-        }
+        *indent = max_indent.max((self.indent + 1) as usize).max(1);
     }
 
     fn fetch_flow_scalar(&mut self, single: bool) -> ScanResult {
