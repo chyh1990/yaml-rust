@@ -638,6 +638,50 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Skip over YAML whitespace (` `, `\n`, `\r`).
+    ///
+    /// # Errors
+    /// This function returns an error if the character after the whitespaces is a tab (`\t`)
+    /// character or if no whitespace was found.
+    fn skip_yaml_whitespace(&mut self) -> ScanResult {
+        let mut need_whitespace = true;
+        loop {
+            match self.look_ch() {
+                ' ' => {
+                    self.skip();
+
+                    need_whitespace = false;
+                }
+                '\n' | '\r' => {
+                    self.lookahead(2);
+                    self.skip_line();
+                    if self.flow_level == 0 {
+                        self.allow_simple_key();
+                    }
+                    need_whitespace = false;
+                }
+                '#' => {
+                    while !is_breakz(self.ch()) {
+                        self.skip();
+                        self.lookahead(1);
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        if need_whitespace {
+            Err(ScanError::new(self.mark(), "expected whitespace"))
+        } else if self.ch() == '\t' {
+            Err(ScanError::new(
+                self.mark(),
+                "tabs disallowed in this context",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn fetch_stream_start(&mut self) {
         let mark = self.mark;
         self.indent = -1;
@@ -1760,6 +1804,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
 
         self.skip();
+        self.skip_yaml_whitespace()?;
         self.tokens.push_back(Token(start_mark, TokenType::Key));
         Ok(())
     }

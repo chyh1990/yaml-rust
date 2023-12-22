@@ -299,7 +299,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 static EXPECTED_FAILURES: &[&str] = &[
     // These seem to be plain bugs
     // TAB as start of plain scalar instead of whitespace
-    "Y79Y-06",
     "Y79Y-03", // unexpected pass
     "Y79Y-04", // unexpected pass
     "Y79Y-05", // unexpected pass
@@ -307,7 +306,6 @@ static EXPECTED_FAILURES: &[&str] = &[
     "DK95-04",
     // TABs after marker ? or : (space required?)
     "Y79Y-07",
-    "Y79Y-08",
     "Y79Y-09",
     // Other TABs
     "DK95-01", // in double-quoted scalar
