@@ -595,6 +595,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Skip over all whitespace and comments until the next token.
+    ///
+    /// # Errors
+    /// This function returns an error if a tabulation is encountered where there should not be
+    /// one.
     fn skip_to_next_token(&mut self) -> ScanResult {
         loop {
             // TODO(chenyh) BOM
@@ -604,7 +609,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 // "Indentation" only exists as long as a block is started, but does not exist
                 // inside of flow-style constructs. Tabs are allowed as part of leaading
                 // whitespaces outside of indentation.
-                '\t' if self.is_within_block() && self.leading_whitespace => {
+                '\t' if self.is_within_block()
+                    && self.leading_whitespace
+                    && (self.mark.col as isize) < self.indent =>
+                {
                     return Err(ScanError::new(
                         self.mark,
                         "tabs disallowed within this context (block indentation)",
@@ -1239,18 +1247,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        // Eat whitespaces and comments to the end of the line.
-        self.lookahead(1);
-
-        while is_blank(self.ch()) {
+        while is_blank(self.look_ch()) {
             self.skip();
-            self.lookahead(1);
         }
 
         if self.ch() == '#' {
-            while !is_breakz(self.ch()) {
+            while !is_breakz(self.look_ch()) {
                 self.skip();
-                self.lookahead(1);
             }
         }
 
@@ -1265,6 +1268,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         if is_break(self.ch()) {
             self.lookahead(2);
             self.skip_line();
+        }
+
+        if self.look_ch() == '\t' {
+            return Err(ScanError::new(
+                start_mark,
+                "a block scalar content cannot start with a tab",
+            ));
         }
 
         if increment > 0 {
