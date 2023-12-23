@@ -648,7 +648,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     && self.leading_whitespace
                     && (self.mark.col as isize) < self.indent =>
                 {
-                    self.skip_ws_to_eol(true);
+                    self.skip_ws_to_eol(SkipTabs::Yes);
                     // If we have content on that line with a tab, return an error.
                     if !is_breakz(self.ch()) {
                         return Err(ScanError::new(
@@ -716,11 +716,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     /// Skip yaml whitespace at most up to eol. Also skips comments.
-    fn skip_ws_to_eol(&mut self, skip_tab: bool) {
+    fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> SkipTabs {
+        let mut encountered_tab = false;
         loop {
             match self.look_ch() {
                 ' ' => self.skip(),
-                '\t' if skip_tab => self.skip(),
+                '\t' if skip_tabs != SkipTabs::No => {
+                    encountered_tab = true;
+                    self.skip();
+                }
                 '#' => {
                     while !is_breakz(self.ch()) {
                         self.skip();
@@ -730,6 +734,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 _ => break,
             }
         }
+
+        SkipTabs::Result(encountered_tab)
     }
 
     fn fetch_stream_start(&mut self) {
@@ -1259,18 +1265,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // generate BLOCK-SEQUENCE-START if indented
         self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
-        if self.ch() == '\t' {
-            self.skip_to_next_token()?;
-            self.lookahead(2);
-            if self.buffer[0] == '-' && is_blankz(self.buffer[1]) {
-                return Err(ScanError::new(
-                    self.mark,
-                    "'-' must be followed by a valid YAML whitespace",
-                ));
-            }
+        let found_tabs = self.skip_ws_to_eol(SkipTabs::Yes).found_tabs();
+        self.lookahead(2);
+        if found_tabs && self.buffer[0] == '-' && is_blankz(self.buffer[1]) {
+            return Err(ScanError::new(
+                self.mark,
+                "'-' must be followed by a valid YAML whitespace",
+            ));
         }
 
-        self.skip_ws_to_eol(false);
+        self.skip_ws_to_eol(SkipTabs::No);
         if is_break(self.look_ch()) || is_flow(self.ch()) {
             self.indents.push(Indent {
                 indent: self.indent,
@@ -2027,5 +2031,28 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Return whether the scanner is inside a block but outside of a flow sequence.
     fn is_within_block(&self) -> bool {
         !self.indents.is_empty()
+    }
+}
+
+/// Behavior to adopt regarding treating tabs as whitespace.
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum SkipTabs {
+    /// Skip all tabs as whitespace.
+    Yes,
+    /// Don't skip any tab. Return from the function when encountering one.
+    No,
+    /// Return value from the function.
+    Result(
+        /// Whether tabs were encountered.
+        bool,
+    ),
+}
+
+impl SkipTabs {
+    /// Whether tabs were found while skipping whitespace.
+    ///
+    /// This function must be called after a call to `skip_ws_to_eol`.
+    fn found_tabs(self) -> bool {
+        matches!(self, SkipTabs::Result(true))
     }
 }
