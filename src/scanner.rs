@@ -680,8 +680,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Skip over YAML whitespace (` `, `\n`, `\r`).
     ///
     /// # Errors
-    /// This function returns an error if the character after the whitespaces is a tab (`\t`)
-    /// character or if no whitespace was found.
+    /// This function returns an error if no whitespace was found.
     fn skip_yaml_whitespace(&mut self) -> ScanResult {
         let mut need_whitespace = true;
         loop {
@@ -711,11 +710,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         if need_whitespace {
             Err(ScanError::new(self.mark(), "expected whitespace"))
-        } else if self.ch() == '\t' {
-            Err(ScanError::new(
-                self.mark(),
-                "tabs disallowed in this context",
-            ))
         } else {
             Ok(())
         }
@@ -1265,6 +1259,17 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // generate BLOCK-SEQUENCE-START if indented
         self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
+        if self.ch() == '\t' {
+            self.skip_to_next_token()?;
+            self.lookahead(2);
+            if self.buffer[0] == '-' && is_blankz(self.buffer[1]) {
+                return Err(ScanError::new(
+                    self.mark,
+                    "'-' must be followed by a valid YAML whitespace",
+                ));
+            }
+        }
+
         self.skip_ws_to_eol(false);
         if is_break(self.look_ch()) || is_flow(self.ch()) {
             self.indents.push(Indent {
@@ -1877,6 +1882,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         self.skip();
         self.skip_yaml_whitespace()?;
+        if self.ch() == '\t' {
+            return Err(ScanError::new(
+                self.mark(),
+                "tabs disallowed in this context",
+            ));
+        }
         self.tokens.push_back(Token(start_mark, TokenType::Key));
         Ok(())
     }
