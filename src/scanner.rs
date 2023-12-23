@@ -181,6 +181,31 @@ impl SimpleKey {
     }
 }
 
+/// An indentation level on the stack of indentations.
+#[derive(Clone, Debug, Default)]
+struct Indent {
+    /// The former indentation level.
+    indent: isize,
+    /// Whether, upon closing, this indents generates a `BlockEnd` token.
+    ///
+    /// There are levels of indentation which do not start a block. Examples of this would be:
+    /// ```yaml
+    /// -
+    ///   foo # ok
+    /// -
+    /// bar # ko, bar needs to be indented further than the `-`.
+    /// - [
+    ///  baz, # ok
+    /// quux # ko, quux needs to be indented further than the '-'.
+    /// ] # ko, the closing bracket needs to be indented further than the `-`.
+    /// ```
+    ///
+    /// The indentation level created by the `-` is for a single entry in the sequence. Emitting a
+    /// `BlockEnd` when this indentation block ends would generate one `BlockEnd` per entry in the
+    /// sequence, although we must have exactly one to end the sequence.
+    needs_block_end: bool,
+}
+
 #[derive(Debug)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Scanner<T> {
@@ -190,7 +215,9 @@ pub struct Scanner<T> {
     buffer: VecDeque<char>,
     error: Option<ScanError>,
 
+    /// Whether we have already emitted the `StreamStart` token.
     stream_start_produced: bool,
+    /// Whether we have already emitted the `StreamEnd` token.
     stream_end_produced: bool,
     adjacent_value_allowed_at: usize,
     /// Whether a simple key could potentially start at the current position.
@@ -198,8 +225,11 @@ pub struct Scanner<T> {
     /// Simple keys are the opposite of complex keys which are keys starting with `?`.
     simple_key_allowed: bool,
     simple_keys: Vec<SimpleKey>,
+    /// The current indentation level.
     indent: isize,
-    indents: Vec<isize>,
+    /// List of all block indentation levels we are in (except the current one).
+    indents: Vec<Indent>,
+    /// Level of nesting of flow sequences.
     flow_level: u8,
     tokens_parsed: usize,
     token_available: bool,
@@ -247,7 +277,9 @@ fn is_blank(c: char) -> bool {
     c == ' ' || c == '\t'
 }
 
-/// Check whether the character is nil or a whitespace (`\0`, ` `, `\t`).
+/// Check whether the character is nil, a linebreak or a whitespace.
+///
+/// `\0`, ` `, `\t`, `\n`, `\r`
 #[inline]
 fn is_blankz(c: char) -> bool {
     is_blank(c) || is_breakz(c)
@@ -454,13 +486,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     pub fn fetch_next_token(&mut self) -> ScanResult {
         self.lookahead(1);
-        // println!("--> fetch_next_token Cur {:?} {:?}", self.mark, self.ch());
+        // eprintln!("--> fetch_next_token Cur {:?} {:?}", self.mark, self.ch());
 
         if !self.stream_start_produced {
             self.fetch_stream_start();
             return Ok(());
         }
         self.skip_to_next_token()?;
+        // eprintln!("--> fetch_next_token wo ws {:?} {:?}", self.mark, self.ch());
 
         self.stale_simple_keys()?;
 
@@ -607,16 +640,22 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ' ' => self.skip(),
                 // Tabs may not be used as indentation.
                 // "Indentation" only exists as long as a block is started, but does not exist
-                // inside of flow-style constructs. Tabs are allowed as part of leaading
+                // inside of flow-style constructs. Tabs are allowed as part of leading
                 // whitespaces outside of indentation.
+                // If a flow-style construct is in an indented block, its contents must still be
+                // indented. Also, tabs are allowed anywhere in it if it has no content.
                 '\t' if self.is_within_block()
                     && self.leading_whitespace
                     && (self.mark.col as isize) < self.indent =>
                 {
-                    return Err(ScanError::new(
-                        self.mark,
-                        "tabs disallowed within this context (block indentation)",
-                    ));
+                    self.skip_ws_to_eol(true);
+                    // If we have content on that line with a tab, return an error.
+                    if !is_breakz(self.ch()) {
+                        return Err(ScanError::new(
+                            self.mark,
+                            "tabs disallowed within this context (block indentation)",
+                        ));
+                    }
                 }
                 '\t' => self.skip(),
                 '\n' | '\r' => {
@@ -679,6 +718,23 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ))
         } else {
             Ok(())
+        }
+    }
+
+    /// Skip yaml whitespace at most up to eol. Also skips comments.
+    fn skip_ws_to_eol(&mut self, skip_tab: bool) {
+        loop {
+            match self.look_ch() {
+                ' ' => self.skip(),
+                '\t' if skip_tab => self.skip(),
+                '#' => {
+                    while !is_breakz(self.ch()) {
+                        self.skip();
+                        self.lookahead(1);
+                    }
+                }
+                _ => break,
+            }
         }
     }
 
@@ -1153,6 +1209,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Push the `FlowEntry` token and skip over the `,`.
     fn fetch_flow_entry(&mut self) -> ScanResult {
         self.remove_simple_key()?;
         self.allow_simple_key();
@@ -1173,6 +1230,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             .ok_or_else(|| ScanError::new(self.mark, "recursion limit exceeded"))?;
         Ok(())
     }
+
     fn decrease_flow_level(&mut self) {
         if self.flow_level > 0 {
             self.flow_level -= 1;
@@ -1180,34 +1238,48 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Push the `Block*` token(s) and skip over the `-`.
+    ///
+    /// Add an indentation level and push a `BlockSequenceStart` token if needed, then push a
+    /// `BlockEntry` token.
+    /// This function only skips over the `-` and does not fetch the entry value.
     fn fetch_block_entry(&mut self) -> ScanResult {
-        if self.flow_level == 0 {
-            // Check if we are allowed to start a new entry.
-            if !self.simple_key_allowed {
-                return Err(ScanError::new(
-                    self.mark,
-                    "block sequence entries are not allowed in this context",
-                ));
-            }
-
-            let mark = self.mark;
-            // generate BLOCK-SEQUENCE-START if indented
-            self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
-        } else {
+        if self.flow_level > 0 {
             // - * only allowed in block
             return Err(ScanError::new(
                 self.mark,
                 r#""-" is only valid inside a block"#,
             ));
         }
+        // Check if we are allowed to start a new entry.
+        if !self.simple_key_allowed {
+            return Err(ScanError::new(
+                self.mark,
+                "block sequence entries are not allowed in this context",
+            ));
+        }
+
+        // Skip over the `-`.
+        let mark = self.mark;
+        self.skip();
+
+        // generate BLOCK-SEQUENCE-START if indented
+        self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
+        self.skip_ws_to_eol(false);
+        if is_break(self.look_ch()) || is_flow(self.ch()) {
+            self.indents.push(Indent {
+                indent: self.indent,
+                needs_block_end: false,
+            });
+            self.indent += 1;
+        }
+
         self.remove_simple_key()?;
         self.allow_simple_key();
 
-        let start_mark = self.mark;
-        self.skip();
-
         self.tokens
-            .push_back(Token(start_mark, TokenType::BlockEntry));
+            .push_back(Token(self.mark, TokenType::BlockEntry));
+
         Ok(())
     }
 
@@ -1809,6 +1881,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Fetch a value from a mapping (after a `:`).
     fn fetch_value(&mut self) -> ScanResult {
         let sk = self.simple_keys.last().unwrap().clone();
         let start_mark = self.mark;
@@ -1868,8 +1941,23 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             return;
         }
 
+        // If the last indent was a non-block indent, remove it.
+        // This means that we prepared an indent that we thought we wouldn't use, but realized just
+        // now that it is a block indent.
+        if self.indent == col as isize {
+            if let Some(indent) = self.indents.last() {
+                if !indent.needs_block_end {
+                    self.indent = indent.indent;
+                    self.indents.pop();
+                }
+            }
+        }
+
         if self.indent < col as isize {
-            self.indents.push(self.indent);
+            self.indents.push(Indent {
+                indent: self.indent,
+                needs_block_end: true,
+            });
             self.indent = col as isize;
             let tokens_parsed = self.tokens_parsed;
             match number {
@@ -1889,14 +1977,19 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             return;
         }
         while self.indent > col {
-            self.tokens.push_back(Token(self.mark, TokenType::BlockEnd));
-            self.indent = self.indents.pop().unwrap();
+            let indent = self.indents.pop().unwrap();
+            self.indent = indent.indent;
+            if indent.needs_block_end {
+                self.tokens.push_back(Token(self.mark, TokenType::BlockEnd));
+            }
         }
     }
 
     fn save_simple_key(&mut self) -> ScanResult {
-        let required = self.flow_level > 0 && self.indent == (self.mark.col as isize);
         if self.simple_key_allowed {
+            let required = self.flow_level > 0
+                && self.indent == (self.mark.col as isize)
+                && self.indents.last().unwrap().needs_block_end;
             let mut sk = SimpleKey::new(self.mark);
             sk.possible = true;
             sk.required = required;
@@ -1922,6 +2015,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     /// Return whether the scanner is inside a block but outside of a flow sequence.
     fn is_within_block(&self) -> bool {
-        !self.indents.is_empty() && self.flow_level == 0
+        !self.indents.is_empty()
     }
 }
