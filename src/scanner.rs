@@ -1915,7 +1915,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.skip();
         if self.look_ch() == '\t'
             && !self.skip_ws_to_eol(SkipTabs::Yes).has_valid_yaml_ws()
-            && self.ch() == '-'
+            && (self.ch() == '-' || is_alpha(self.ch()))
         {
             return Err(ScanError::new(
                 self.mark,
