@@ -1819,6 +1819,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             while is_blank(self.look_ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
                     if leading_blanks && (self.mark.col as isize) < indent && self.ch() == '\t' {
+                        // If our line contains only whitespace, this is not an error.
+                        // Skip over it.
+                        self.skip_ws_to_eol(SkipTabs::Yes);
+                        if is_breakz(self.ch()) {
+                            continue;
+                        }
                         return Err(ScanError::new(
                             start_mark,
                             "while scanning a plain scalar, found a tab",
