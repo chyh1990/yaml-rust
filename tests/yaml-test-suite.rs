@@ -301,7 +301,6 @@ static EXPECTED_FAILURES: &[&str] = &[
     // TAB as start of plain scalar instead of whitespace
     // TABs in whitespace-only lines
     // TABs after marker ? or : (space required?)
-    "Y79Y-07",
     "Y79Y-09",
     // Other TABs
     "DK95-01", // in double-quoted scalar

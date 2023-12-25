@@ -718,9 +718,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Skip yaml whitespace at most up to eol. Also skips comments.
     fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> SkipTabs {
         let mut encountered_tab = false;
+        let mut has_yaml_ws = false;
         loop {
             match self.look_ch() {
-                ' ' => self.skip(),
+                ' ' => {
+                    has_yaml_ws = true;
+                    self.skip();
+                }
                 '\t' if skip_tabs != SkipTabs::No => {
                     encountered_tab = true;
                     self.skip();
@@ -735,7 +739,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        SkipTabs::Result(encountered_tab)
+        SkipTabs::Result(encountered_tab, has_yaml_ws)
     }
 
     fn fetch_stream_start(&mut self) {
@@ -1906,6 +1910,19 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn fetch_value(&mut self) -> ScanResult {
         let sk = self.simple_keys.last().unwrap().clone();
         let start_mark = self.mark;
+
+        // Skip over ':'.
+        self.skip();
+        if self.look_ch() == '\t'
+            && !self.skip_ws_to_eol(SkipTabs::Yes).has_valid_yaml_ws()
+            && self.ch() == '-'
+        {
+            return Err(ScanError::new(
+                self.mark,
+                "':' must be followed by a valid YAML whitespace",
+            ));
+        }
+
         if sk.possible {
             // insert simple key
             let tok = Token(sk.mark, TokenType::Key);
@@ -1946,7 +1963,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 self.disallow_simple_key();
             }
         }
-        self.skip();
         self.tokens.push_back(Token(start_mark, TokenType::Value));
 
         Ok(())
@@ -2041,6 +2057,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 }
 
 /// Behavior to adopt regarding treating tabs as whitespace.
+///
+/// Although tab is a valid yaml whitespace, it doesn't always behave the same as a space.
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum SkipTabs {
     /// Skip all tabs as whitespace.
@@ -2051,6 +2069,8 @@ enum SkipTabs {
     Result(
         /// Whether tabs were encountered.
         bool,
+        /// Whether at least 1 valid yaml whitespace has been encountered.
+        bool,
     ),
 }
 
@@ -2059,6 +2079,13 @@ impl SkipTabs {
     ///
     /// This function must be called after a call to `skip_ws_to_eol`.
     fn found_tabs(self) -> bool {
-        matches!(self, SkipTabs::Result(true))
+        matches!(self, SkipTabs::Result(true, _))
+    }
+
+    /// Whether a valid YAML whitespace has been found in skipped-over content.
+    ///
+    /// This function must be called after a call to `skip_ws_to_eol`.
+    fn has_valid_yaml_ws(self) -> bool {
+        matches!(self, SkipTabs::Result(_, true))
     }
 }
