@@ -16,6 +16,7 @@ struct EventSink {
 
 impl MarkedEventReceiver for EventSink {
     fn on_event(&mut self, ev: Event, mark: Marker) {
+        eprintln!("    \x1B[;34m\u{21B3} {:?}\x1B[;m", &ev);
         self.events.push((ev, mark));
     }
 }
@@ -34,5 +35,6 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
 
-    dbg!(str_to_events(&s));
+    // dbg!(str_to_events(&s));
+    str_to_events(&s);
 }

@@ -59,7 +59,7 @@ macro_rules! assert_next {
         match $v.next().unwrap() {
             $p => {}
             e => {
-                panic!("unexpected event: {:?}", e);
+                panic!("unexpected event: {:?} (expected {:?})", e, stringify!($p));
             }
         }
     };

@@ -244,6 +244,12 @@ impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
             return None;
         }
         match self.next_token() {
+            Ok(Some(tok)) => {
+                if std::env::var("YAMLRUST_DEBUG").is_ok() {
+                    eprintln!("\x1B[;32m{:?} \x1B[;36m{:?}\x1B[;m", tok.1, tok.0);
+                }
+                Some(tok)
+            }
             Ok(tok) => tok,
             Err(e) => {
                 self.error = Some(e);
