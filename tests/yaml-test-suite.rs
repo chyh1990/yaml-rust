@@ -297,12 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // These seem to be plain bugs
-    // TAB as start of plain scalar instead of whitespace
-    // TABs in whitespace-only lines
-    // TABs after marker ? or : (space required?)
-    // Other TABs
-    "DK95-01", // in double-quoted scalar
     // Empty key in flow mappings
     "CFD4",
     // Document with no nodes and document end

@@ -234,6 +234,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         }
     }
 
+    /// Peek at the next token from the scanner.
     fn peek_token(&mut self) -> Result<&Token, ScanError> {
         match self.token {
             None => {
@@ -244,6 +245,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
         }
     }
 
+    /// Extract and return the next token from the scanner.
+    ///
+    /// This function does _not_ make use of `self.token`.
     fn scan_next_token(&mut self) -> Result<Token, ScanError> {
         let token = self.scanner.next();
         match token {

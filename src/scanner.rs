@@ -730,9 +730,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     self.skip();
                 }
                 '#' => {
-                    while !is_breakz(self.ch()) {
+                    while !is_breakz(self.look_ch()) {
                         self.skip();
-                        self.lookahead(1);
                     }
                 }
                 _ => break,
@@ -1280,11 +1279,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         self.skip_ws_to_eol(SkipTabs::No);
         if is_break(self.look_ch()) || is_flow(self.ch()) {
-            self.indents.push(Indent {
-                indent: self.indent,
-                needs_block_end: false,
-            });
-            self.indent += 1;
+            self.roll_one_col_indent();
         }
 
         self.remove_simple_key()?;
@@ -1335,17 +1330,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // skip '|' or '>'
         self.skip();
-        self.lookahead(1);
+        self.unroll_non_block_indents();
 
-        if self.ch() == '+' || self.ch() == '-' {
+        if self.look_ch() == '+' || self.ch() == '-' {
             if self.ch() == '+' {
                 chomping = 1;
             } else {
                 chomping = -1;
             }
             self.skip();
-            self.lookahead(1);
-            if is_digit(self.ch()) {
+            if is_digit(self.look_ch()) {
                 if self.ch() == '0' {
                     return Err(ScanError::new(
                         start_mark,
@@ -1376,15 +1370,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        while is_blank(self.look_ch()) {
-            self.skip();
-        }
-
-        if self.ch() == '#' {
-            while !is_breakz(self.look_ch()) {
-                self.skip();
-            }
-        }
+        self.skip_ws_to_eol(SkipTabs::Yes);
 
         // Check if we are at the end of the line.
         if !is_breakz(self.ch()) {
@@ -1584,8 +1570,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.lookahead(2);
 
             leading_blanks = false;
-            // Consume non-blank characters.
 
+            // Consume non-blank characters.
             while !is_blankz(self.ch()) {
                 match self.ch() {
                     // Check for an escaped single quote.
@@ -1683,6 +1669,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 if is_blank(self.ch()) {
                     // Consume a space or a tab character.
                     if leading_blanks {
+                        if self.ch() == '\t' && (self.mark.col as isize) < self.indent {
+                            return Err(ScanError::new(
+                                self.mark,
+                                "tab cannot be used as indentation",
+                            ));
+                        }
                         self.skip();
                     } else {
                         whitespaces.push(self.ch());
@@ -1750,6 +1742,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn scan_plain_scalar(&mut self) -> Result<Token, ScanError> {
+        self.unroll_non_block_indents();
         let indent = self.indent + 1;
         let start_mark = self.mark;
 
@@ -1936,6 +1929,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 TokenType::BlockMappingStart,
                 start_mark,
             );
+            self.roll_one_col_indent();
 
             self.simple_keys.last_mut().unwrap().possible = false;
             self.disallow_simple_key();
@@ -1956,6 +1950,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     start_mark,
                 );
             }
+            self.roll_one_col_indent();
 
             if self.flow_level == 0 {
                 self.allow_simple_key();
@@ -1981,7 +1976,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         // If the last indent was a non-block indent, remove it.
         // This means that we prepared an indent that we thought we wouldn't use, but realized just
         // now that it is a block indent.
-        if self.indent == col as isize {
+        if self.indent <= col as isize {
             if let Some(indent) = self.indents.last() {
                 if !indent.needs_block_end {
                     self.indent = indent.indent;
@@ -2018,6 +2013,31 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.indent = indent.indent;
             if indent.needs_block_end {
                 self.tokens.push_back(Token(self.mark, TokenType::BlockEnd));
+            }
+        }
+    }
+
+    /// Add an indentation level of 1 column that does not start a block.
+    ///
+    /// See the documentation of [`Indent::needs_block_end`] for more details.
+    fn roll_one_col_indent(&mut self) {
+        if self.flow_level == 0 {
+            self.indents.push(Indent {
+                indent: self.indent,
+                needs_block_end: false,
+            });
+            self.indent += 1;
+        }
+    }
+
+    /// Unroll all last indents created with [`Self::roll_one_col_indent`].
+    fn unroll_non_block_indents(&mut self) {
+        while let Some(indent) = self.indents.last() {
+            if indent.needs_block_end {
+                break;
+            } else {
+                self.indent = indent.indent;
+                self.indents.pop();
             }
         }
     }
