@@ -147,15 +147,26 @@ pub enum TokenType {
     FlowMappingStart,
     /// End of an inline mapping.
     FlowMappingEnd,
+    /// An entry in a block sequence (c.f.: [`TokenType::BlockSequenceStart`]).
     BlockEntry,
+    /// An entry in a flow sequence (c.f.: [`TokenType::FlowSequenceStart`]).
     FlowEntry,
+    /// A key in a mapping.
     Key,
+    /// A value in a mapping.
     Value,
+    /// A reference to an anchor.
     Alias(String),
     /// A YAML anchor (`&`/`*`).
     Anchor(String),
-    /// handle, suffix
-    Tag(String, String),
+    /// A YAML tag (starting with bangs `!`).
+    Tag(
+        /// The handle of the tag.
+        String,
+        /// The suffix of the tag.
+        String,
+    ),
+    /// A regular YAML scalar.
     Scalar(TScalarStyle, String),
 }
 
@@ -209,10 +220,15 @@ struct Indent {
 #[derive(Debug)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Scanner<T> {
+    /// The reader, providing with characters.
     rdr: T,
+    /// The position of the cursor within the reader.
     mark: Marker,
+    /// Buffer for tokens to be read.
     tokens: VecDeque<Token>,
+    /// Buffer for the next characters to consume.
     buffer: VecDeque<char>,
+    /// The last error that happened.
     error: Option<ScanError>,
 
     /// Whether we have already emitted the `StreamStart` token.
