@@ -297,8 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Empty key in flow mappings
-    "CFD4",
     // Document with no nodes and document end
     "HWV9",
     "QT73",

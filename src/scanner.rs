@@ -251,6 +251,15 @@ pub struct Scanner<T> {
     token_available: bool,
     /// Whether all characters encountered since the last newline were whitespace.
     leading_whitespace: bool,
+    /// Whether we started a flow mapping.
+    ///
+    /// This is used to detect implicit flow mapping starts such as:
+    /// ```yaml
+    /// [ : foo ] # { null: "foo" }
+    /// ```
+    flow_mapping_started: bool,
+    /// Whether we currently are in an implicit flow mapping.
+    implicit_flow_mapping: bool,
 }
 
 impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
@@ -365,6 +374,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             tokens_parsed: 0,
             token_available: false,
             leading_whitespace: true,
+            flow_mapping_started: false,
+            implicit_flow_mapping: false,
         }
     }
 
@@ -1217,6 +1228,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let start_mark = self.mark;
         self.skip();
 
+        if tok == TokenType::FlowMappingStart {
+            self.flow_mapping_started = true;
+        }
+
         self.tokens.push_back(Token(start_mark, tok));
         Ok(())
     }
@@ -1226,6 +1241,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.decrease_flow_level();
 
         self.disallow_simple_key();
+
+        self.end_implicit_mapping(self.mark);
 
         let start_mark = self.mark;
         self.skip();
@@ -1238,6 +1255,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn fetch_flow_entry(&mut self) -> ScanResult {
         self.remove_simple_key()?;
         self.allow_simple_key();
+
+        self.end_implicit_mapping(self.mark);
 
         let start_mark = self.mark;
         self.skip();
@@ -1899,6 +1918,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 TokenType::BlockMappingStart,
                 start_mark,
             );
+        } else {
+            // The parser, upon receiving a `Key`, will insert a `MappingStart` event.
+            self.flow_mapping_started = true;
         }
 
         self.remove_simple_key()?;
@@ -1925,6 +1947,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn fetch_value(&mut self) -> ScanResult {
         let sk = self.simple_keys.last().unwrap().clone();
         let start_mark = self.mark;
+        self.implicit_flow_mapping = self.flow_level > 0 && !self.flow_mapping_started;
 
         // Skip over ':'.
         self.skip();
@@ -1943,6 +1966,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             let tok = Token(sk.mark, TokenType::Key);
             let tokens_parsed = self.tokens_parsed;
             self.insert_token(sk.token_number - tokens_parsed, tok);
+            if self.implicit_flow_mapping {
+                self.insert_token(
+                    sk.token_number - tokens_parsed,
+                    Token(self.mark, TokenType::FlowMappingStart),
+                );
+            }
 
             // Add the BLOCK-MAPPING-START token if needed.
             self.roll_indent(
@@ -1956,6 +1985,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.simple_keys.last_mut().unwrap().possible = false;
             self.disallow_simple_key();
         } else {
+            if self.implicit_flow_mapping {
+                self.tokens
+                    .push_back(Token(self.mark, TokenType::FlowMappingStart));
+            }
             // The ':' indicator follows a complex key.
             if self.flow_level == 0 {
                 if !self.simple_key_allowed {
@@ -2095,6 +2128,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Return whether the scanner is inside a block but outside of a flow sequence.
     fn is_within_block(&self) -> bool {
         !self.indents.is_empty()
+    }
+
+    /// If an implicit mapping had started, end it.
+    fn end_implicit_mapping(&mut self, mark: Marker) {
+        if self.implicit_flow_mapping {
+            self.implicit_flow_mapping = false;
+            self.flow_mapping_started = false;
+            self.tokens
+                .push_back(Token(mark, TokenType::FlowMappingEnd));
+        }
     }
 }
 
