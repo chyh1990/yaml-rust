@@ -351,6 +351,31 @@ fn is_flow(c: char) -> bool {
     matches!(c, ',' | '[' | ']' | '{' | '}')
 }
 
+/// Check whether the character is the BOM character.
+#[inline]
+fn is_bom(c: char) -> bool {
+    c == '\u{FEFF}'
+}
+
+/// Check whether the character is a YAML non-breaking character.
+#[inline]
+fn is_yaml_non_break(c: char) -> bool {
+    // TODO(ethiraric, 28/12/2023): is_printable
+    !is_break(c) && !is_bom(c)
+}
+
+/// Check whether the character is NOT a YAML whitespace (` ` / `\t`).
+#[inline]
+fn is_yaml_non_space(c: char) -> bool {
+    is_yaml_non_break(c) && !is_blank(c)
+}
+
+/// Check whether the character is a valid YAML anchor name character.
+#[inline]
+fn is_anchor_char(c: char) -> bool {
+    is_yaml_non_space(c) && !is_flow(c) && !is_z(c)
+}
+
 pub type ScanResult = Result<(), ScanError>;
 
 impl<T: Iterator<Item = char>> Scanner<T> {
@@ -1193,20 +1218,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let start_mark = self.mark;
 
         self.skip();
-        self.lookahead(1);
-        while is_alpha(self.ch()) || self.ch_is(':') {
+        while is_anchor_char(self.look_ch()) {
             string.push(self.ch());
             self.skip();
-            self.lookahead(1);
         }
 
-        if string.is_empty()
-            || match self.ch() {
-                c if is_blankz(c) => false,
-                '?' | ',' | ']' | '}' | '%' | '@' | '`' => false,
-                _ => true,
-            }
-        {
+        if string.is_empty() {
             return Err(ScanError::new(start_mark, "while scanning an anchor or alias, did not find expected alphabetic or numeric character"));
         }
 
@@ -2172,5 +2189,14 @@ impl SkipTabs {
     /// This function must be called after a call to `skip_ws_to_eol`.
     fn has_valid_yaml_ws(self) -> bool {
         matches!(self, SkipTabs::Result(_, true))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_is_anchor_char() {
+        use super::is_anchor_char;
+        assert!(is_anchor_char('x'));
     }
 }

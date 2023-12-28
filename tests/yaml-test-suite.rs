@@ -297,9 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Unusual characters in anchors/aliases
-    "8XYN", // emoji!!
-    "W5VH", // :@*!$"<foo>:
     // Flow mapping colon on next line / multiline key in flow mapping
     "4MUZ-00",
     "4MUZ-01",
