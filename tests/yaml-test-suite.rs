@@ -297,9 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Document with no nodes and document end
-    "HWV9",
-    "QT73",
     // Unusual characters in anchors/aliases
     "8XYN", // emoji!!
     "W5VH", // :@*!$"<foo>:

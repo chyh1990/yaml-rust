@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 enum State {
+    /// We await the start of the stream.
     StreamStart,
     ImplicitDocumentStart,
     DocumentStart,
@@ -265,6 +266,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             .expect("fetch_token needs to be preceded by peek_token")
     }
 
+    /// Skip the next token from the scanner.
     fn skip(&mut self) {
         self.token = None;
         //self.peek_token();
@@ -407,7 +409,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn state_machine(&mut self) -> ParseResult {
-        // let next_tok = self.peek_token()?;
+        // let next_tok = self.peek_token().cloned()?;
         // println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
         match self.state {
             State::StreamStart => self.stream_start(),
@@ -458,10 +460,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn document_start(&mut self, implicit: bool) -> ParseResult {
-        if !implicit {
-            while let TokenType::DocumentEnd = self.peek_token()?.1 {
-                self.skip();
-            }
+        while let TokenType::DocumentEnd = self.peek_token()?.1 {
+            self.skip();
         }
 
         match *self.peek_token()? {
