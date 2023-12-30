@@ -271,7 +271,10 @@ impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
         match self.next_token() {
             Ok(Some(tok)) => {
                 if std::env::var("YAMLRUST_DEBUG").is_ok() {
-                    eprintln!("\x1B[;32m{:?} \x1B[;36m{:?}\x1B[;m", tok.1, tok.0);
+                    eprintln!(
+                        "    \x1B[;32m\u{21B3} {:?} \x1B[;36m{:?}\x1B[;m",
+                        tok.1, tok.0
+                    );
                 }
                 Some(tok)
             }
@@ -551,7 +554,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             return Ok(());
         }
         self.skip_to_next_token()?;
-        // eprintln!("--> fetch_next_token wo ws {:?} {:?}", self.mark, self.ch());
+
+        if std::env::var("YAMLRUST_DEBUG").is_ok() {
+            eprintln!(
+                "  \x1B[38;5;244m\u{2192} fetch_next_token after whitespace {:?} {:?}\x1B[m",
+                self.mark,
+                self.ch()
+            );
+        }
 
         self.stale_simple_keys()?;
 
