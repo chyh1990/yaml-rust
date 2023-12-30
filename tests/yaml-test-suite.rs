@@ -298,15 +298,8 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // Flow mapping colon on next line / multiline key in flow mapping
-    "4MUZ-00",
-    "4MUZ-01",
-    "4MUZ-02",
     "5MUD",
-    "9SA2",
     "K3WX",
-    "NJ66",
-    "UT92",
-    "VJP3-01",
     // Bare document after end marker
     "7Z25",
     "M7A3",

@@ -106,6 +106,7 @@ impl fmt::Display for ScanError {
     }
 }
 
+/// The contents of a scanner token.
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub enum TokenType {
     NoToken,
@@ -170,18 +171,79 @@ pub enum TokenType {
     Scalar(TScalarStyle, String),
 }
 
+/// A scanner token.
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub struct Token(pub Marker, pub TokenType);
 
+/// A scalar that was parsed and may correspond to a simple key.
+///
+/// Upon scanning the following yaml:
+/// ```yaml
+/// a: b
+/// ```
+/// We do not know that `a` is a key for a map until we have reached the following `:`. For this
+/// YAML, we would store `a` as a scalar token in the [`Scanner`], but not emit it yet. It would be
+/// kept inside the scanner until more context is fetched and we are able to know whether it is a
+/// plain scalar or a key.
+///
+/// For example, see the following 2 yaml documents:
+/// ```yaml
+/// ---
+/// a: b # Here, `a` is a key.
+/// ...
+/// ---
+/// a # Here, `a` is a plain scalar.
+/// ...
+/// ```
+/// An instance of [`SimpleKey`] is created in the [`Scanner`] when such ambiguity occurs.
+///
+/// In both documents, scanning `a` would lead to the creation of a [`SimpleKey`] with
+/// [`Self::possible`] set to `true`. The token for `a` would be pushed in the [`Scanner`] but not
+/// yet emitted. Instead, more context would be fetched (through [`Scanner::fetch_more_tokens`]).
+///
+/// In the first document, upon reaching the `:`, the [`SimpleKey`] would be inspected and our
+/// scalar `a` since it is a possible key, would be "turned" into a key. This is done by prepending
+/// a [`TokenType::Key`] to our scalar token in the [`Scanner`]. This way, the
+/// [`crate::parser::Parser`] would read the [`TokenType::Key`] token before the
+/// [`TokenType::Scalar`] token.
+///
+/// In the second document however, reaching the EOF would stale the [`SimpleKey`] and no
+/// [`TokenType::Key`] would be emitted by the scanner.
 #[derive(Clone, PartialEq, Debug, Eq)]
 struct SimpleKey {
+    /// Whether the token this [`SimpleKey`] refers to may still be a key.
+    ///
+    /// Sometimes, when we have more context, we notice that what we thought could be a key no
+    /// longer can be. In that case, [`Self::possible`] is set to `false`.
+    ///
+    /// For instance, let us consider the following invalid YAML:
+    /// ```yaml
+    /// key
+    ///   : value
+    /// ```
+    /// Upon reading the `\n` after `key`, the [`SimpleKey`] that was created for `key` is staled
+    /// and [`Self::possible`] set to `false`.
     possible: bool,
+    /// Whether the token this [`SimpleKey`] refers to is required to be a key.
+    ///
+    /// With more context, we may know for sure that the token must be a key. If the YAML is
+    /// invalid, it may happen that the token be deemed not a key. In such event, an error has to
+    /// be raised. This boolean helps us know when to raise such error.
+    ///
+    /// TODO(ethiraric, 30/12/2023): Example of when this happens.
     required: bool,
+    /// The index of the token referred to by the [`SimpleKey`].
+    ///
+    /// This is the index in the scanner, which takes into account both the tokens that have been
+    /// emitted and those about to be emitted. See [`Scanner::tokens_parsed`] and
+    /// [`Scanner::tokens`] for more details.
     token_number: usize,
+    /// The position at which the token the [`SimpleKey`] refers to is.
     mark: Marker,
 }
 
 impl SimpleKey {
+    /// Create a new [`SimpleKey`] at the given `Marker` and with the given flow level.
     fn new(mark: Marker) -> SimpleKey {
         SimpleKey {
             possible: false,
@@ -217,6 +279,15 @@ struct Indent {
     needs_block_end: bool,
 }
 
+/// The YAML scanner.
+///
+/// This corresponds to the low-level interface when reading YAML. The scanner emits token as they
+/// are read (akin to a lexer), but it also holds sufficient context to be able to disambiguate
+/// some of the constructs. It has understanding of indentation and whitespace and is able to
+/// generate error messages for some invalid YAML constructs.
+///
+/// It is however not a full parser and needs [`parser::Parser`] to fully detect invalid YAML
+/// documents.
 #[derive(Debug)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Scanner<T> {
@@ -224,7 +295,12 @@ pub struct Scanner<T> {
     rdr: T,
     /// The position of the cursor within the reader.
     mark: Marker,
-    /// Buffer for tokens to be read.
+    /// Buffer for tokens to be returned.
+    ///
+    /// This buffer can hold some temporary tokens that are not yet ready to be returned. For
+    /// instance, if we just read a scalar, it can be a value or a key if an implicit mapping
+    /// follows. In this case, the token stays in the `VecDeque` but cannot be returned from
+    /// [`Self::next`] until we have more context.
     tokens: VecDeque<Token>,
     /// Buffer for the next characters to consume.
     buffer: VecDeque<char>,
@@ -240,6 +316,10 @@ pub struct Scanner<T> {
     ///
     /// Simple keys are the opposite of complex keys which are keys starting with `?`.
     simple_key_allowed: bool,
+    /// A stack of potential simple keys.
+    ///
+    /// Refer to the documentation of [`SimpleKey`] for a more in-depth explanation of what they
+    /// are.
     simple_keys: Vec<SimpleKey>,
     /// The current indentation level.
     indent: isize,
@@ -247,7 +327,11 @@ pub struct Scanner<T> {
     indents: Vec<Indent>,
     /// Level of nesting of flow sequences.
     flow_level: u8,
+    /// The number of tokens that have been returned from the scanner.
+    ///
+    /// This excludes the tokens from [`Self::tokens`].
     tokens_parsed: usize,
+    /// Whether a token is ready to be taken from [`Self::tokens`].
     token_available: bool,
     /// Whether all characters encountered since the last newline were whitespace.
     leading_whitespace: bool,
@@ -407,6 +491,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Get a copy of the last error that was encountered, if any.
+    ///
+    /// This does not clear the error state and further calls to [`Self::get_error`] will return (a
+    /// clone of) the same error.
     #[inline]
     pub fn get_error(&self) -> Option<ScanError> {
         self.error.as_ref().map(std::clone::Clone::clone)
@@ -425,7 +513,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    /// Consume the next character. Remove from buffer and update mark.
+    /// Consume the next character, remove it from the buffer and update the mark.
     #[inline]
     fn skip(&mut self) {
         let c = self.buffer.pop_front().unwrap();
@@ -487,12 +575,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     #[inline]
     fn ch_is(&self, c: char) -> bool {
         self.buffer[0] == c
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    fn eof(&self) -> bool {
-        self.ch_is('\0')
     }
 
     #[inline]
@@ -600,6 +682,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             return Ok(());
         }
 
+        if (self.mark.col as isize) < self.indent {
+            return Err(ScanError::new(self.mark, "invalid indentation"));
+        }
+
         let c = self.buffer[0];
         let nc = self.buffer[1];
         match c {
@@ -663,7 +749,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 need_more = true;
             } else {
                 need_more = false;
+                // Stale potential keys that we know won't be keys.
                 self.stale_simple_keys()?;
+                // If our next token to be emitted may be a key, fetch more context.
                 for sk in &self.simple_keys {
                     if sk.possible && sk.token_number == self.tokens_parsed {
                         need_more = true;
@@ -682,10 +770,19 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Mark simple keys that can no longer be keys as such.
+    ///
+    /// This function sets `possible` to `false` to each key that, now we have more context, we
+    /// know will not be keys.
+    ///
+    /// # Errors
+    /// This function returns an error if one of the key we would stale was required to be a key.
     fn stale_simple_keys(&mut self) -> ScanResult {
-        for sk in &mut self.simple_keys {
+        for (_, sk) in self.simple_keys.iter_mut().enumerate() {
             if sk.possible
-                && (sk.mark.line < self.mark.line || sk.mark.index + 1024 < self.mark.index)
+                // If not in a flow construct, simple keys cannot span multiple lines.
+                && self.flow_level == 0
+                    && (sk.mark.line < self.mark.line || sk.mark.index + 1024 < self.mark.index)
             {
                 if sk.required {
                     return Err(ScanError::new(self.mark, "simple key expect ':'"));
@@ -824,6 +921,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         if self.mark.col != 0 {
             self.mark.col = 0;
             self.mark.line += 1;
+        }
+
+        // If the stream ended, we won't have more context. We can stall all the simple keys we
+        // had. If one was required, however, that was an error and we must propagate it.
+        for sk in &mut self.simple_keys {
+            if sk.required && sk.possible {
+                return Err(ScanError::new(self.mark, "simple key expected"));
+            }
+            sk.possible = false;
         }
 
         self.unroll_indent(-1);
@@ -990,11 +1096,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
         let handle = self.scan_tag_handle(true, mark)?;
 
-        self.lookahead(1);
         /* Eat whitespaces. */
-        while is_blank(self.ch()) {
+        while is_blank(self.look_ch()) {
             self.skip();
-            self.lookahead(1);
         }
 
         let is_secondary = handle == "!!";
@@ -1013,7 +1117,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn fetch_tag(&mut self) -> ScanResult {
-        self.save_simple_key()?;
+        self.save_simple_key();
         self.disallow_simple_key();
 
         let tok = self.scan_tag()?;
@@ -1213,7 +1317,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn fetch_anchor(&mut self, alias: bool) -> ScanResult {
-        self.save_simple_key()?;
+        self.save_simple_key();
         self.disallow_simple_key();
 
         let tok = self.scan_anchor(alias)?;
@@ -1246,8 +1350,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     fn fetch_flow_collection_start(&mut self, tok: TokenType) -> ScanResult {
         // The indicators '[' and '{' may start a simple key.
-        self.save_simple_key()?;
+        self.save_simple_key();
 
+        self.roll_one_col_indent();
         self.increase_flow_level()?;
 
         self.allow_simple_key();
@@ -1375,7 +1480,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn fetch_block_scalar(&mut self, literal: bool) -> ScanResult {
-        self.save_simple_key()?;
+        self.save_simple_key();
         self.allow_simple_key();
         let tok = self.scan_block_scalar(literal)?;
 
@@ -1585,7 +1690,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn fetch_flow_scalar(&mut self, single: bool) -> ScanResult {
-        self.save_simple_key()?;
+        self.save_simple_key();
         self.disallow_simple_key();
 
         let tok = self.scan_flow_scalar(single)?;
@@ -1800,7 +1905,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn fetch_plain_scalar(&mut self) -> ScanResult {
-        self.save_simple_key()?;
+        self.save_simple_key();
         self.disallow_simple_key();
 
         let tok = self.scan_plain_scalar()?;
@@ -1991,11 +2096,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         if sk.possible {
             // insert simple key
             let tok = Token(sk.mark, TokenType::Key);
-            let tokens_parsed = self.tokens_parsed;
-            self.insert_token(sk.token_number - tokens_parsed, tok);
+            self.insert_token(sk.token_number - self.tokens_parsed, tok);
             if self.implicit_flow_mapping {
+                if sk.mark.line < start_mark.line {
+                    return Err(ScanError::new(
+                        start_mark,
+                        "illegal placement of ':' indicator",
+                    ));
+                }
                 self.insert_token(
-                    sk.token_number - tokens_parsed,
+                    sk.token_number - self.tokens_parsed,
                     Token(self.mark, TokenType::FlowMappingStart),
                 );
             }
@@ -2102,8 +2212,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Add an indentation level of 1 column that does not start a block.
     ///
     /// See the documentation of [`Indent::needs_block_end`] for more details.
+    /// An indentation is not added if we are inside a flow level or if the last indent is already
+    /// a non-block indent.
     fn roll_one_col_indent(&mut self) {
-        if self.flow_level == 0 {
+        if self.flow_level == 0 && self.indents.last().map_or(false, |x| x.needs_block_end) {
             self.indents.push(Indent {
                 indent: self.indent,
                 needs_block_end: false,
@@ -2124,7 +2236,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    fn save_simple_key(&mut self) -> ScanResult {
+    /// Save the last token in [`Self::tokens`] as a simple key.
+    fn save_simple_key(&mut self) {
         if self.simple_key_allowed {
             let required = self.flow_level > 0
                 && self.indent == (self.mark.col as isize)
@@ -2134,12 +2247,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             sk.required = required;
             sk.token_number = self.tokens_parsed + self.tokens.len();
 
-            self.remove_simple_key()?;
-
             self.simple_keys.pop();
             self.simple_keys.push(sk);
         }
-        Ok(())
     }
 
     fn remove_simple_key(&mut self) -> ScanResult {
