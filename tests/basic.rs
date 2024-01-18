@@ -52,7 +52,9 @@ scalar
 key: [1, 2]]
 key1:a2
 ";
-    let Err(error) = YamlLoader::load_from_str(s) else { panic!() };
+    let Err(error) = YamlLoader::load_from_str(s) else {
+        panic!()
+    };
     assert_eq!(
         error.info(),
         "mapping values are not allowed in this context"
@@ -232,6 +234,14 @@ fn test_bad_hyphen() {
 fn test_issue_65() {
     // See: https://github.com/chyh1990/yaml-rust/issues/65
     let b = "\n\"ll\\\"ll\\\r\n\"ll\\\"ll\\\r\r\r\rU\r\r\rU";
+    assert!(YamlLoader::load_from_str(b).is_err());
+}
+
+#[test]
+fn test_issue_65_mwe() {
+    // A MWE for `test_issue_65`. The error over there is that there is invalid trailing content
+    // after a double quoted string.
+    let b = r#""foo" l"#;
     assert!(YamlLoader::load_from_str(b).is_err());
 }
 

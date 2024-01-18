@@ -679,6 +679,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             && is_blankz(self.buffer[3])
         {
             self.fetch_document_indicator(TokenType::DocumentEnd)?;
+            self.skip_ws_to_eol(SkipTabs::Yes);
+            if !is_breakz(self.ch()) {
+            return Err(ScanError::new(self.mark, "invalid content after document end marker"));
+            }
             return Ok(());
         }
 
@@ -1809,6 +1813,25 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // Eat the right quote.
         self.skip();
+        // Ensure there is no invalid trailing content.
+        self.skip_ws_to_eol(SkipTabs::Yes);
+        match self.ch() {
+            // These can be encountered in flow sequences or mappings.
+            ',' | '}' | ']' if self.flow_level > 0 => {}
+            // An end-of-line / end-of-stream is fine. No trailing content.
+            c if is_breakz(c) => {}
+            // ':' can be encountered if our scalar is a key.
+            // Outside of flow contexts, keys cannot span multiple lines
+            ':' if self.flow_level == 0 && start_mark.line == self.mark.line => {}
+            // Inside a flow context, this is allowed.
+            ':' if self.flow_level > 0 => {}
+            _ => {
+                return Err(ScanError::new(
+                    self.mark,
+                    "invalid trailing content after double-quoted scalar",
+                ));
+            }
+        }
 
         let style = if single {
             TScalarStyle::SingleQuoted
