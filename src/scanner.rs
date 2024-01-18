@@ -1741,98 +1741,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ));
             }
 
-            self.lookahead(2);
-
             leading_blanks = false;
+            self.consume_flow_scalar_non_whitespace_chars(
+                single,
+                &mut string,
+                &mut leading_blanks,
+                &start_mark,
+            )?;
 
-            // Consume non-blank characters.
-            while !is_blankz(self.ch()) {
-                match self.ch() {
-                    // Check for an escaped single quote.
-                    '\'' if self.buffer[1] == '\'' && single => {
-                        string.push('\'');
-                        self.skip();
-                        self.skip();
-                    }
-                    // Check for the right quote.
-                    '\'' if single => break,
-                    '"' if !single => break,
-                    // Check for an escaped line break.
-                    '\\' if !single && is_break(self.buffer[1]) => {
-                        self.lookahead(3);
-                        self.skip();
-                        self.skip_line();
-                        leading_blanks = true;
-                        break;
-                    }
-                    // Check for an escape sequence.
-                    '\\' if !single => {
-                        let mut code_length = 0usize;
-                        match self.buffer[1] {
-                            '0' => string.push('\0'),
-                            'a' => string.push('\x07'),
-                            'b' => string.push('\x08'),
-                            't' | '\t' => string.push('\t'),
-                            'n' => string.push('\n'),
-                            'v' => string.push('\x0b'),
-                            'f' => string.push('\x0c'),
-                            'r' => string.push('\x0d'),
-                            'e' => string.push('\x1b'),
-                            ' ' => string.push('\x20'),
-                            '"' => string.push('"'),
-                            '\'' => string.push('\''),
-                            '\\' => string.push('\\'),
-                            // NEL (#x85)
-                            'N' => string.push(char::from_u32(0x85).unwrap()),
-                            // #xA0
-                            '_' => string.push(char::from_u32(0xA0).unwrap()),
-                            // LS (#x2028)
-                            'L' => string.push(char::from_u32(0x2028).unwrap()),
-                            // PS (#x2029)
-                            'P' => string.push(char::from_u32(0x2029).unwrap()),
-                            'x' => code_length = 2,
-                            'u' => code_length = 4,
-                            'U' => code_length = 8,
-                            _ => {
-                                return Err(ScanError::new(
-                                    start_mark,
-                                    "while parsing a quoted scalar, found unknown escape character",
-                                ))
-                            }
-                        }
-                        self.skip();
-                        self.skip();
-                        // Consume an arbitrary escape code.
-                        if code_length > 0 {
-                            self.lookahead(code_length);
-                            let mut value = 0u32;
-                            for i in 0..code_length {
-                                if !is_hex(self.buffer[i]) {
-                                    return Err(ScanError::new(start_mark,
-                                        "while parsing a quoted scalar, did not find expected hexadecimal number"));
-                                }
-                                value = (value << 4) + as_hex(self.buffer[i]);
-                            }
-
-                            let Some(ch) = char::from_u32(value) else {
-                                return Err(ScanError::new(start_mark, "while parsing a quoted scalar, found invalid Unicode character escape code"));
-                            };
-                            string.push(ch);
-
-                            for _ in 0..code_length {
-                                self.skip();
-                            }
-                        }
-                    }
-                    c => {
-                        string.push(c);
-                        self.skip();
-                    }
-                }
-                self.lookahead(2);
-            }
-            self.lookahead(1);
-            match self.ch() {
+            match self.look_ch() {
                 '\'' if single => break,
                 '"' if !single => break,
                 _ => {}
@@ -1867,6 +1784,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
                 self.lookahead(1);
             }
+
             // Join the whitespaces or fold line breaks.
             if leading_blanks {
                 if leading_break.is_empty() {
@@ -1892,17 +1810,138 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         // Eat the right quote.
         self.skip();
 
-        if single {
-            Ok(Token(
-                start_mark,
-                TokenType::Scalar(TScalarStyle::SingleQuoted, string),
-            ))
+        let style = if single {
+            TScalarStyle::SingleQuoted
         } else {
-            Ok(Token(
-                start_mark,
-                TokenType::Scalar(TScalarStyle::DoubleQuoted, string),
-            ))
+            TScalarStyle::DoubleQuoted
+        };
+        Ok(Token(start_mark, TokenType::Scalar(style, string)))
+    }
+
+    /// Consume successive non-whitespace characters from a flow scalar.
+    ///
+    /// This function resolves escape sequences and stops upon encountering a whitespace, the end
+    /// of the stream or the closing character for the scalar (`'` for single quoted scalars, `"`
+    /// for double quoted scalars).
+    ///
+    /// # Errors
+    /// Return an error if an invalid escape sequence is found.
+    fn consume_flow_scalar_non_whitespace_chars(
+        &mut self,
+        single: bool,
+        string: &mut String,
+        leading_blanks: &mut bool,
+        start_mark: &Marker,
+    ) -> Result<(), ScanError> {
+        self.lookahead(2);
+        while !is_blankz(self.ch()) {
+            match self.ch() {
+                // Check for an escaped single quote.
+                '\'' if self.buffer[1] == '\'' && single => {
+                    string.push('\'');
+                    self.skip();
+                    self.skip();
+                }
+                // Check for the right quote.
+                '\'' if single => break,
+                '"' if !single => break,
+                // Check for an escaped line break.
+                '\\' if !single && is_break(self.buffer[1]) => {
+                    self.lookahead(3);
+                    self.skip();
+                    self.skip_line();
+                    *leading_blanks = true;
+                    break;
+                }
+                // Check for an escape sequence.
+                '\\' if !single => {
+                    string.push(self.resolve_flow_scalar_escape_sequence(start_mark)?);
+                }
+                c => {
+                    string.push(c);
+                    self.skip();
+                }
+            }
+            self.lookahead(2);
         }
+        Ok(())
+    }
+
+    /// Escape the sequence we encounter in a flow scalar.
+    ///
+    /// `self.ch()` must point to the `\` starting the escape sequence.
+    ///
+    /// # Errors
+    /// Return an error if an invalid escape sequence is found.
+    fn resolve_flow_scalar_escape_sequence(
+        &mut self,
+        start_mark: &Marker,
+    ) -> Result<char, ScanError> {
+        let mut code_length = 0usize;
+        let mut ret = '\0';
+
+        match self.buffer[1] {
+            '0' => ret = '\0',
+            'a' => ret = '\x07',
+            'b' => ret = '\x08',
+            't' | '\t' => ret = '\t',
+            'n' => ret = '\n',
+            'v' => ret = '\x0b',
+            'f' => ret = '\x0c',
+            'r' => ret = '\x0d',
+            'e' => ret = '\x1b',
+            ' ' => ret = '\x20',
+            '"' => ret = '"',
+            '\'' => ret = '\'',
+            '\\' => ret = '\\',
+            // Unicode next line (#x85)
+            'N' => ret = char::from_u32(0x85).unwrap(),
+            // Unicode non-breaking space (#xA0)
+            '_' => ret = char::from_u32(0xA0).unwrap(),
+            // Unicode line separator (#x2028)
+            'L' => ret = char::from_u32(0x2028).unwrap(),
+            // Unicode paragraph separator (#x2029)
+            'P' => ret = char::from_u32(0x2029).unwrap(),
+            'x' => code_length = 2,
+            'u' => code_length = 4,
+            'U' => code_length = 8,
+            _ => {
+                return Err(ScanError::new(
+                    *start_mark,
+                    "while parsing a quoted scalar, found unknown escape character",
+                ))
+            }
+        }
+        self.skip();
+        self.skip();
+
+        // Consume an arbitrary escape code.
+        if code_length > 0 {
+            self.lookahead(code_length);
+            let mut value = 0u32;
+            for i in 0..code_length {
+                if !is_hex(self.buffer[i]) {
+                    return Err(ScanError::new(
+                        *start_mark,
+                        "while parsing a quoted scalar, did not find expected hexadecimal number",
+                    ));
+                }
+                value = (value << 4) + as_hex(self.buffer[i]);
+            }
+
+            let Some(ch) = char::from_u32(value) else {
+                return Err(ScanError::new(
+                    *start_mark,
+                    "while parsing a quoted scalar, found invalid Unicode character escape code",
+                ));
+            };
+            ret = ch;
+
+            for _ in 0..code_length {
+                self.skip();
+            }
+        }
+        Ok(ret)
     }
 
     fn fetch_plain_scalar(&mut self) -> ScanResult {
