@@ -555,8 +555,10 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn document_end(&mut self) -> ParseResult {
+        let mut explicit_end = false;
         let marker: Marker = match *self.peek_token()? {
             Token(mark, TokenType::DocumentEnd) => {
+                explicit_end = true;
                 self.skip();
                 mark
             }
@@ -564,7 +566,11 @@ impl<T: Iterator<Item = char>> Parser<T> {
         };
 
         self.tags.clear();
-        self.state = State::DocumentStart;
+        if explicit_end {
+            self.state = State::ImplicitDocumentStart;
+        } else {
+            self.state = State::DocumentStart;
+        }
         Ok((Event::DocumentEnd, marker))
     }
 

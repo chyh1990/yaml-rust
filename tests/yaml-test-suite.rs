@@ -298,7 +298,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // Bare document after end marker
-    "7Z25",
     "M7A3",
     // Scalar marker on document start line
     "DK3J",
