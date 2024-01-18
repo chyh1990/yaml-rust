@@ -1697,6 +1697,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // From spec: To ensure JSON compatibility, if a key inside a flow mapping is JSON-like,
         // YAML allows the following value to be specified adjacent to the “:”.
+        self.skip_to_next_token()?;
         self.adjacent_value_allowed_at = self.mark.index;
 
         self.tokens.push_back(tok);
