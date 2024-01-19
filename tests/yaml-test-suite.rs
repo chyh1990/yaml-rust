@@ -297,12 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Comments on nonempty lines need leading space
-    "9JBA",
-    "CVW2",
-    "MUS6-00",
-    "SU5Z",
-    "X4QW",
     // Directives (various)
     "9HCY", // Directive after content
     "EB22", // Directive after content

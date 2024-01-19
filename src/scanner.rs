@@ -679,7 +679,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             && is_blankz(self.buffer[3])
         {
             self.fetch_document_indicator(TokenType::DocumentEnd)?;
-            self.skip_ws_to_eol(SkipTabs::Yes);
+            self.skip_ws_to_eol(SkipTabs::Yes)?;
             if !is_breakz(self.ch()) {
                 return Err(ScanError::new(
                     self.mark,
@@ -820,7 +820,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     && self.leading_whitespace
                     && (self.mark.col as isize) < self.indent =>
                 {
-                    self.skip_ws_to_eol(SkipTabs::Yes);
+                    self.skip_ws_to_eol(SkipTabs::Yes)?;
                     // If we have content on that line with a tab, return an error.
                     if !is_breakz(self.ch()) {
                         return Err(ScanError::new(
@@ -888,7 +888,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     /// Skip yaml whitespace at most up to eol. Also skips comments.
-    fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> SkipTabs {
+    fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> Result<SkipTabs, ScanError> {
         let mut encountered_tab = false;
         let mut has_yaml_ws = false;
         loop {
@@ -901,6 +901,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     encountered_tab = true;
                     self.skip();
                 }
+                // YAML comments must be preceded by whitespace.
+                '#' if !encountered_tab && !has_yaml_ws => {
+                    return Err(ScanError::new(
+                        self.mark,
+                        "comments must be separated from other tokens by whitespace",
+                    ));
+                }
                 '#' => {
                     while !is_breakz(self.look_ch()) {
                         self.skip();
@@ -910,7 +917,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        SkipTabs::Result(encountered_tab, has_yaml_ws)
+        Ok(SkipTabs::Result(encountered_tab, has_yaml_ws))
     }
 
     fn fetch_stream_start(&mut self) {
@@ -955,6 +962,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.disallow_simple_key();
 
         let tok = self.scan_directive()?;
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         self.tokens.push_back(tok);
 
@@ -988,17 +996,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         };
         self.lookahead(1);
 
-        while is_blank(self.ch()) {
-            self.skip();
-            self.lookahead(1);
-        }
-
-        if self.ch() == '#' {
-            while !is_breakz(self.ch()) {
-                self.skip();
-                self.lookahead(1);
-            }
-        }
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         if !is_breakz(self.ch()) {
             return Err(ScanError::new(
@@ -1070,8 +1068,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn scan_version_directive_number(&mut self, mark: &Marker) -> Result<u32, ScanError> {
         let mut val = 0u32;
         let mut length = 0usize;
-        self.lookahead(1);
-        while is_digit(self.ch()) {
+        while let Some(digit) = self.look_ch().to_digit(10) {
             if length + 1 > 9 {
                 return Err(ScanError::new(
                     *mark,
@@ -1079,9 +1076,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ));
             }
             length += 1;
-            val = val * 10 + ((self.ch() as u32) - ('0' as u32));
+            val = val * 10 + digit;
             self.skip();
-            self.lookahead(1);
         }
 
         if length == 0 {
@@ -1371,6 +1367,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.flow_mapping_started = true;
         }
 
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
+
         self.tokens.push_back(Token(start_mark, tok));
         Ok(())
     }
@@ -1385,6 +1383,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         let start_mark = self.mark;
         self.skip();
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         self.tokens.push_back(Token(start_mark, tok));
         Ok(())
@@ -1399,6 +1398,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         let start_mark = self.mark;
         self.skip();
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         self.tokens
             .push_back(Token(start_mark, TokenType::FlowEntry));
@@ -1448,7 +1448,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // generate BLOCK-SEQUENCE-START if indented
         self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
-        let found_tabs = self.skip_ws_to_eol(SkipTabs::Yes).found_tabs();
+        let found_tabs = self.skip_ws_to_eol(SkipTabs::Yes)?.found_tabs();
         self.lookahead(2);
         if found_tabs && self.buffer[0] == '-' && is_blankz(self.buffer[1]) {
             return Err(ScanError::new(
@@ -1457,7 +1457,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ));
         }
 
-        self.skip_ws_to_eol(SkipTabs::No);
+        self.skip_ws_to_eol(SkipTabs::No)?;
         if is_break(self.look_ch()) || is_flow(self.ch()) {
             self.roll_one_col_indent();
         }
@@ -1550,7 +1550,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        self.skip_ws_to_eol(SkipTabs::Yes);
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         // Check if we are at the end of the line.
         if !is_breakz(self.ch()) {
@@ -1828,7 +1828,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         // Eat the right quote.
         self.skip();
         // Ensure there is no invalid trailing content.
-        self.skip_ws_to_eol(SkipTabs::Yes);
+        self.skip_ws_to_eol(SkipTabs::Yes)?;
         match self.ch() {
             // These can be encountered in flow sequences or mappings.
             ',' | '}' | ']' if self.flow_level > 0 => {}
@@ -2068,7 +2068,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     if leading_blanks && (self.mark.col as isize) < indent && self.ch() == '\t' {
                         // If our line contains only whitespace, this is not an error.
                         // Skip over it.
-                        self.skip_ws_to_eol(SkipTabs::Yes);
+                        self.skip_ws_to_eol(SkipTabs::Yes)?;
                         if is_breakz(self.ch()) {
                             continue;
                         }
@@ -2161,7 +2161,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         // Skip over ':'.
         self.skip();
         if self.look_ch() == '\t'
-            && !self.skip_ws_to_eol(SkipTabs::Yes).has_valid_yaml_ws()
+            && !self.skip_ws_to_eol(SkipTabs::Yes)?.has_valid_yaml_ws()
             && (self.ch() == '-' || is_alpha(self.ch()))
         {
             return Err(ScanError::new(
