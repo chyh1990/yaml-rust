@@ -315,7 +315,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // Misc
-    "9MMW", // Mapping key in implicit mapping in flow sequence(!)
     "G9HC", // Anchor indent problem(?)
     "H7J7", // Anchor indent / linebreak problem?
     "3UYS", // Escaped /

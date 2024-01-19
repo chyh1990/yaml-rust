@@ -311,6 +311,8 @@ pub struct Scanner<T> {
     stream_start_produced: bool,
     /// Whether we have already emitted the `StreamEnd` token.
     stream_end_produced: bool,
+    /// In some flow contexts, the value of a mapping is allowed to be adjacent to the `:`. When it
+    /// is, the index at which the `:` may be must be stored in `adjacent_value_allowed_at`.
     adjacent_value_allowed_at: usize,
     /// Whether a simple key could potentially start at the current position.
     ///
@@ -1394,6 +1396,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let start_mark = self.mark;
         self.skip();
         self.skip_ws_to_eol(SkipTabs::Yes)?;
+
+        // A flow collection within a flow mapping can be a key. In that case, the value may be
+        // adjacent to the `:`.
+        // ```yaml
+        // - [ {a: b}:value ]
+        // ```
+        if self.flow_level > 0 {
+            self.adjacent_value_allowed_at = self.mark.index;
+        }
 
         self.tokens.push_back(Token(start_mark, tok));
         Ok(())
