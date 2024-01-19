@@ -2030,6 +2030,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn scan_plain_scalar(&mut self) -> Result<Token, ScanError> {
         self.unroll_non_block_indents();
         let indent = self.indent + 1;
@@ -2044,7 +2045,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         loop {
             /* Check for a document indicator. */
             self.lookahead(4);
-
             if self.mark.col == 0
                 && (((self.buffer[0] == '-') && (self.buffer[1] == '-') && (self.buffer[2] == '-'))
                     || ((self.buffer[0] == '.')
@@ -2058,6 +2058,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             if self.ch() == '#' {
                 break;
             }
+
+            if self.flow_level > 0 && self.ch() == '-' && is_flow(self.buffer[1]) {
+                return Err(ScanError::new(
+                    self.mark,
+                    "plain scalar cannot start with '-' followed by ,[]{}",
+                ));
+            }
+
             while !is_blankz(self.ch()) {
                 // indicators can end a plain scalar, see 7.3.3. Plain Style
                 match self.ch() {
@@ -2066,7 +2074,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     {
                         break;
                     }
-                    ',' | '[' | ']' | '{' | '}' if self.flow_level > 0 => break,
+                    c if is_flow(c) && self.flow_level > 0 => break,
                     _ => {}
                 }
 

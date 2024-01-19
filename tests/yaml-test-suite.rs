@@ -297,9 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Dashes in flow sequence (should be forbidden)
-    "G5U8",
-    "YJV2",
     // Misc
     "9MMW", // Mapping key in implicit mapping in flow sequence(!)
     "G9HC", // Anchor indent problem(?)
