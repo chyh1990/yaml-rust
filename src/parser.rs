@@ -498,15 +498,20 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn parser_process_directives(&mut self) -> Result<(), ScanError> {
+        let mut version_directive_received = false;
         loop {
             let mut tags = HashMap::new();
             match self.peek_token()? {
-                Token(_, TokenType::VersionDirective(_, _)) => {
+                Token(mark, TokenType::VersionDirective(_, _)) => {
                     // XXX parsing with warning according to spec
                     //if major != 1 || minor > 2 {
                     //    return Err(ScanError::new(tok.0,
                     //        "found incompatible YAML document"));
                     //}
+                    if version_directive_received == true {
+                        return Err(ScanError::new(*mark, "duplicate version directive"));
+                    }
+                    version_directive_received = true;
                 }
                 Token(mark, TokenType::TagDirective(handle, prefix)) => {
                     if tags.contains_key(handle) {
