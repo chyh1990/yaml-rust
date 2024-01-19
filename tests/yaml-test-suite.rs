@@ -161,7 +161,7 @@ impl EventReceiver for EventReporter {
                     TScalarStyle::SingleQuoted => "'",
                     TScalarStyle::DoubleQuoted => r#"""#,
                     TScalarStyle::Literal => "|",
-                    TScalarStyle::Foled => ">",
+                    TScalarStyle::Folded => ">",
                     TScalarStyle::Any => unreachable!(),
                 };
                 format!(
@@ -297,9 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Losing trailing newline
-    "JEF9-02",
-    "L24T-01",
     // Dashes in flow sequence (should be forbidden)
     "G5U8",
     "YJV2",

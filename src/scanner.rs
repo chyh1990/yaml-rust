@@ -18,7 +18,7 @@ pub enum TScalarStyle {
     DoubleQuoted,
 
     Literal,
-    Foled,
+    Folded,
 }
 
 /// A location in a yaml document.
@@ -1508,15 +1508,21 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     #[allow(clippy::too_many_lines)]
     fn scan_block_scalar(&mut self, literal: bool) -> Result<Token, ScanError> {
         let start_mark = self.mark;
-        let mut chomping: i32 = 0;
+        let mut chomping = Chomping::Clip;
         let mut increment: usize = 0;
         let mut indent: usize = 0;
         let mut trailing_blank: bool;
         let mut leading_blank: bool = false;
+        let style = if literal {
+            TScalarStyle::Literal
+        } else {
+            TScalarStyle::Folded
+        };
 
         let mut string = String::new();
         let mut leading_break = String::new();
         let mut trailing_breaks = String::new();
+        let mut chomping_break = String::new();
 
         // skip '|' or '>'
         self.skip();
@@ -1524,9 +1530,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         if self.look_ch() == '+' || self.ch() == '-' {
             if self.ch() == '+' {
-                chomping = 1;
+                chomping = Chomping::Keep;
             } else {
-                chomping = -1;
+                chomping = Chomping::Strip;
             }
             self.skip();
             if is_digit(self.look_ch()) {
@@ -1552,9 +1558,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.lookahead(1);
             if self.ch() == '+' || self.ch() == '-' {
                 if self.ch() == '+' {
-                    chomping = 1;
+                    chomping = Chomping::Keep;
                 } else {
-                    chomping = -1;
+                    chomping = Chomping::Strip;
                 }
                 self.skip();
             }
@@ -1563,7 +1569,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         // Check if we are at the end of the line.
-        if !is_breakz(self.ch()) {
+        if !is_breakz(self.look_ch()) {
             return Err(ScanError::new(
                 start_mark,
                 "while scanning a block scalar, did not find expected comment or line break",
@@ -1572,7 +1578,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         if is_break(self.ch()) {
             self.lookahead(2);
-            self.skip_line();
+            self.read_break(&mut chomping_break);
         }
 
         if self.look_ch() == '\t' {
@@ -1597,7 +1603,27 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.skip_block_scalar_indent(indent, &mut trailing_breaks);
         }
 
-        self.lookahead(1);
+        // We have an end-of-stream with no content, e.g.:
+        // ```yaml
+        // - |+
+        // ```
+        if is_z(self.ch()) {
+            let contents = match chomping {
+                // We strip trailing linebreaks. Nothing remain.
+                Chomping::Strip => String::new(),
+                // There was no newline after the chomping indicator.
+                _ if self.mark.line == start_mark.line() => String::new(),
+                // We clip lines, and there was a newline after the chomping indicator.
+                // All other breaks are ignored.
+                Chomping::Clip => chomping_break,
+                // We keep lines. There was a newline after the chomping indicator but nothing
+                // else.
+                Chomping::Keep if trailing_breaks.is_empty() => chomping_break,
+                // Otherwise, the newline after chomping is ignored.
+                Chomping::Keep => trailing_breaks,
+            };
+            return Ok(Token(start_mark, TokenType::Scalar(style, contents)));
+        }
 
         let start_mark = self.mark;
 
@@ -1608,6 +1634,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     break;
                 }
             }
+
             // We are at the beginning of a non-empty line.
             trailing_blank = is_blank(self.ch());
             if !literal && !leading_break.is_empty() && !leading_blank && !trailing_blank {
@@ -1643,25 +1670,21 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
 
         // Chomp the tail.
-        if chomping != -1 {
+        if chomping != Chomping::Strip {
             string.push_str(&leading_break);
+            // If we had reached an eof but the last character wasn't an end-of-line, check if the
+            // last line was indented at least as the rest of the scalar, then we need to consider
+            // there is a newline.
+            if is_z(self.ch()) && self.mark.col >= indent.max(1) {
+                string.push('\n');
+            }
         }
 
-        if chomping == 1 {
+        if chomping == Chomping::Keep {
             string.push_str(&trailing_breaks);
         }
 
-        if literal {
-            Ok(Token(
-                start_mark,
-                TokenType::Scalar(TScalarStyle::Literal, string),
-            ))
-        } else {
-            Ok(Token(
-                start_mark,
-                TokenType::Scalar(TScalarStyle::Foled, string),
-            ))
-        }
+        Ok(Token(start_mark, TokenType::Scalar(style, string)))
     }
 
     /// Skip the block scalar indentation and empty lines.
@@ -2403,6 +2426,19 @@ impl SkipTabs {
     fn has_valid_yaml_ws(self) -> bool {
         matches!(self, SkipTabs::Result(_, true))
     }
+}
+
+/// Chomping, how final line breaks and trailing empty lines are interpreted.
+///
+/// See YAML spec 8.1.1.2.
+#[derive(PartialEq, Eq)]
+pub enum Chomping {
+    /// The final line break and any trailing empty lines are excluded.
+    Strip,
+    /// The final line break is preserved, but trailing empty lines are excluded.
+    Clip,
+    /// The final line break and trailing empty lines are included.
+    Keep,
 }
 
 #[cfg(test)]
