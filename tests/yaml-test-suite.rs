@@ -37,12 +37,11 @@ fn main() -> Result<()> {
         .iter()
         .filter(|&&test| !tests.iter().any(|t| t.name == test))
         .collect();
-    if !missing_xfails.is_empty() {
-        panic!(
-            "The following EXPECTED_FAILURES not found during discovery: {:?}",
-            missing_xfails
-        );
-    }
+    assert!(
+        missing_xfails.is_empty(),
+        "The following EXPECTED_FAILURES not found during discovery: {:?}",
+        missing_xfails
+    );
 
     run_tests(&arguments, tests, run_yaml_test).exit();
 }
@@ -50,21 +49,40 @@ fn main() -> Result<()> {
 fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
     let desc = &test.data;
     let actual_events = parse_to_events(&desc.yaml);
-    let events_diff = actual_events.map(|events| events_differ(events, &desc.expected_events));
-    let mut error_text = match (events_diff, desc.expected_error) {
+    let events_diff = actual_events.map(|events| events_differ(&events, &desc.expected_events));
+    let mut error_text = match (&events_diff, desc.expected_error) {
         (Ok(x), true) => Some(format!("no error when expected: {x:#?}")),
-        (Err(_), true) => None,
-        (Err(e), false) => Some(format!("unexpected error {:?}", e)),
-        (Ok(Some(diff)), false) => Some(format!("events differ: {}", diff)),
-        (Ok(None), false) => None,
+        (Err(_), true) | (Ok(None), false) => None,
+        (Err(e), false) => Some(format!("unexpected error {e:?}")),
+        (Ok(Some(diff)), false) => Some(format!("events differ: {diff}")),
     };
+
+    // Show a caret on error.
     if let Some(text) = &mut error_text {
         use std::fmt::Write;
-        let _ = write!(text, "\n### Input:\n{}\n### End", desc.yaml_visual);
+        let _ = writeln!(text, "\n### Input:\n{}\n### End", desc.yaml_visual);
+        if let Err(err) = &events_diff {
+            writeln!(text, "### Error position").unwrap();
+            let mut lines = desc.yaml.lines();
+            for _ in 0..(err.marker().line() - 1) {
+                let l = lines.next().unwrap();
+                writeln!(text, "{l}").unwrap();
+            }
+            writeln!(text, "\x1B[91;1m{}", lines.next().unwrap()).unwrap();
+            for _ in 0..err.marker().col() {
+                write!(text, " ").unwrap();
+            }
+            writeln!(text, "^\x1b[m").unwrap();
+            for l in lines {
+                writeln!(text, "{l}").unwrap();
+            }
+            writeln!(text, "### End error position").unwrap();
+        }
     }
+
     match (error_text, desc.is_xfail) {
         (None, false) => Outcome::Passed,
-        (Some(text), false) => Outcome::Failed { msg: Some(text) },
+        (Some(txt), false) => Outcome::Failed { msg: Some(txt) },
         (Some(_), true) => Outcome::Ignored,
         (None, true) => Outcome::Failed {
             msg: Some("expected to fail but passes".into()),
@@ -84,7 +102,7 @@ fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
     let mut current_test = yaml::Hash::new();
     for (idx, test_data) in tests.iter().enumerate() {
         let name = if tests.len() > 1 {
-            format!("{}-{:02}", test_name, idx)
+            format!("{test_name}-{idx:02}")
         } else {
             test_name.to_string()
         };
@@ -172,7 +190,7 @@ impl EventReceiver for EventReporter {
                     escape_text(text)
                 )
             }
-            Event::Alias(idx) => format!("=ALI *{}", idx),
+            Event::Alias(idx) => format!("=ALI *{idx}"),
             Event::Nothing => return,
         };
         self.events.push(line);
@@ -181,16 +199,16 @@ impl EventReceiver for EventReporter {
 
 fn format_index(idx: usize) -> String {
     if idx > 0 {
-        format!(" &{}", idx)
+        format!(" &{idx}")
     } else {
-        "".into()
+        String::new()
     }
 }
 
 fn escape_text(text: &str) -> String {
     let mut text = text.to_owned();
     for (ch, replacement) in [
-        ('\\', r#"\\"#),
+        ('\\', r"\\"),
         ('\n', "\\n"),
         ('\r', "\\r"),
         ('\x08', "\\b"),
@@ -205,11 +223,11 @@ fn format_tag(tag: &Option<Tag>) -> String {
     if let Some(tag) = tag {
         format!(" <{}{}>", tag.handle, tag.suffix)
     } else {
-        "".into()
+        String::new()
     }
 }
 
-fn events_differ(actual: Vec<String>, expected: &str) -> Option<String> {
+fn events_differ(actual: &[String], expected: &str) -> Option<String> {
     let actual = actual.iter().map(Some).chain(std::iter::repeat(None));
     let expected = expected_events(expected);
     let expected = expected.iter().map(Some).chain(std::iter::repeat(None));
@@ -220,13 +238,12 @@ fn events_differ(actual: Vec<String>, expected: &str) -> Option<String> {
                     continue;
                 } else {
                     Some(format!(
-                        "line {} differs: \n=> expected `{}`\n=>    found `{}`",
-                        idx, exp, act
+                        "line {idx} differs: \n=> expected `{exp}`\n=>    found `{act}`",
                     ))
                 }
             }
-            (Some(a), None) => Some(format!("extra actual line: {:?}", a)),
-            (None, Some(e)) => Some(format!("extra expected line: {:?}", e)),
+            (Some(a), None) => Some(format!("extra actual line: {a:?}")),
+            (None, Some(e)) => Some(format!("extra expected line: {e:?}")),
             (None, None) => None,
         };
     }
