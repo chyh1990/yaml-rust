@@ -681,7 +681,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.fetch_document_indicator(TokenType::DocumentEnd)?;
             self.skip_ws_to_eol(SkipTabs::Yes);
             if !is_breakz(self.ch()) {
-            return Err(ScanError::new(self.mark, "invalid content after document end marker"));
+                return Err(ScanError::new(
+                    self.mark,
+                    "invalid content after document end marker",
+                ));
             }
             return Ok(());
         }
@@ -1690,7 +1693,18 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        *indent = max_indent.max((self.indent + 1) as usize).max(1);
+        // In case a yaml looks like:
+        // ```yaml
+        // |
+        // foo
+        // bar
+        // ```
+        // We need to set the indent to 0 and not 1. In all other cases, the indent must be at
+        // least 1. When in the above example, `self.indent` will be set to -1.
+        *indent = max_indent.max((self.indent + 1) as usize);
+        if self.indent > 0 {
+            *indent = (*indent).max(1);
+        }
     }
 
     fn fetch_flow_scalar(&mut self, single: bool) -> ScanResult {
