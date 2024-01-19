@@ -298,10 +298,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // Directives (various)
-    "9HCY", // Directive after content
-    "EB22", // Directive after content
-    "MUS6-01", // no document end marker?
-    "RHX7", // no document end marker
     "SF5V", // duplicate directive
     "W4TN", // scalar confused as directive
     // Losing trailing newline

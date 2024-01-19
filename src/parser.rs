@@ -271,9 +271,11 @@ impl<T: Iterator<Item = char>> Parser<T> {
         self.token = None;
         //self.peek_token();
     }
+    /// Pops the top-most state and make it the current state.
     fn pop_state(&mut self) {
         self.state = self.states.pop().unwrap();
     }
+    /// Push a new state atop the state stack.
     fn push_state(&mut self, state: State) {
         self.states.push(state);
     }
@@ -569,8 +571,17 @@ impl<T: Iterator<Item = char>> Parser<T> {
         if explicit_end {
             self.state = State::ImplicitDocumentStart;
         } else {
+            if let Token(mark, TokenType::VersionDirective(..) | TokenType::TagDirective(..)) =
+                *self.peek_token()?
+            {
+                return Err(ScanError::new(
+                    mark,
+                    "missing explicit document end marker before directive",
+                ));
+            }
             self.state = State::DocumentStart;
         }
+
         Ok((Event::DocumentEnd, marker))
     }
 
