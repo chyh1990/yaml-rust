@@ -220,7 +220,7 @@ fn events_differ(actual: Vec<String>, expected: &str) -> Option<String> {
                     continue;
                 } else {
                     Some(format!(
-                        "line {} differs: expected `{}`, found `{}`",
+                        "line {} differs: \n=> expected `{}`\n=>    found `{}`",
                         idx, exp, act
                     ))
                 }
@@ -297,8 +297,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
-    // Directives (various)
-    "W4TN", // scalar confused as directive
     // Losing trailing newline
     "JEF9-02",
     "L24T-01",

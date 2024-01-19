@@ -612,6 +612,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Check whether the next characters correspond to an end of document.
+    ///
+    /// [`Self::lookahead`] must have been called before calling this function.
+    fn next_is_document_end(&self) -> bool {
+        self.buffer[0] == '.'
+            && self.buffer[1] == '.'
+            && self.buffer[2] == '.'
+            && is_blankz(self.buffer[3])
+    }
+
     /// Insert a token at the given position.
     fn insert_token(&mut self, pos: usize, tok: Token) {
         let old_len = self.tokens.len();
@@ -1592,6 +1602,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let start_mark = self.mark;
 
         while self.mark.col == indent && !is_z(self.ch()) {
+            if indent == 0 {
+                self.lookahead(4);
+                if self.next_is_document_end() {
+                    break;
+                }
+            }
             // We are at the beginning of a non-empty line.
             trailing_blank = is_blank(self.ch());
             if !literal && !leading_break.is_empty() && !leading_blank && !trailing_blank {
