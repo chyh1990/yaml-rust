@@ -1463,6 +1463,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ));
         }
 
+        // ???, fixes test G9HC.
+        if let Some(Token(mark, TokenType::Anchor(..) | TokenType::Tag(..))) = self.tokens.back() {
+            if self.mark.col == 0 && mark.col == 0 && self.indent > -1 {
+                return Err(ScanError::new(*mark, "invalid indentation for anchor"));
+            }
+        }
+
         // Skip over the `-`.
         let mark = self.mark;
         self.skip();
@@ -2047,6 +2054,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let indent = self.indent + 1;
         let start_mark = self.mark;
 
+        if self.flow_level > 0 && (start_mark.col as isize) < indent {
+            return Err(ScanError::new(start_mark, "foo"));
+        }
+
         let mut string = String::new();
         let mut leading_break = String::new();
         let mut trailing_breaks = String::new();
@@ -2371,10 +2382,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    /// Save the last token in [`Self::tokens`] as a simple key.
+    /// Mark the next token to be inserted as a potential simple key.
     fn save_simple_key(&mut self) {
         if self.simple_key_allowed {
-            let required = self.flow_level > 0
+            let required = self.flow_level == 0
                 && self.indent == (self.mark.col as isize)
                 && self.indents.last().unwrap().needs_block_end;
             let mut sk = SimpleKey::new(self.mark);

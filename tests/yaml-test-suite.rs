@@ -315,8 +315,6 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // Misc
-    "G9HC", // Anchor indent problem(?)
-    "H7J7", // Anchor indent / linebreak problem?
     "3UYS", // Escaped /
     "HRE5", // Escaped ' in double-quoted (should not work)
     "QB6E", // Indent for multiline double-quoted scalar
