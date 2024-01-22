@@ -1816,6 +1816,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ));
             }
 
+            if (self.mark.col as isize) < self.indent {
+                return Err(ScanError::new(start_mark, "invalid identation in quoted scalar"));
+            }
+
             leading_blanks = false;
             self.consume_flow_scalar_non_whitespace_chars(
                 single,
@@ -2055,7 +2059,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let start_mark = self.mark;
 
         if self.flow_level > 0 && (start_mark.col as isize) < indent {
-            return Err(ScanError::new(start_mark, "foo"));
+            return Err(ScanError::new(
+                start_mark,
+                "invalid indentation in flow construct",
+            ));
         }
 
         let mut string = String::new();
