@@ -1643,8 +1643,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             return Ok(Token(start_mark, TokenType::Scalar(style, contents)));
         }
 
-        let start_mark = self.mark;
+        if self.mark.col < indent && (self.mark.col as isize) > self.indent {
+            return Err(ScanError::new(
+                self.mark,
+                "wrongly indented line in block scalar",
+            ));
+        }
 
+        let start_mark = self.mark;
         while self.mark.col == indent && !is_z(self.ch()) {
             if indent == 0 {
                 self.lookahead(4);
@@ -1817,7 +1823,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
 
             if (self.mark.col as isize) < self.indent {
-                return Err(ScanError::new(start_mark, "invalid identation in quoted scalar"));
+                return Err(ScanError::new(
+                    start_mark,
+                    "invalid identation in quoted scalar",
+                ));
             }
 
             leading_blanks = false;
