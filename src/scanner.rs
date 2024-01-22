@@ -1986,7 +1986,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             'e' => ret = '\x1b',
             ' ' => ret = '\x20',
             '"' => ret = '"',
-            '\'' => ret = '\'',
+            '/' => ret = '/',
             '\\' => ret = '\\',
             // Unicode next line (#x85)
             'N' => ret = char::from_u32(0x85).unwrap(),
