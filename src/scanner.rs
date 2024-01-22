@@ -1188,7 +1188,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        if is_blankz(self.look_ch()) {
+        if is_blankz(self.look_ch()) || (self.flow_level > 0 && is_flow(self.ch())) {
             // XXX: ex 7.2, an empty scalar can follow a secondary tag
             Ok(Token(start_mark, TokenType::Tag(handle, suffix)))
         } else {

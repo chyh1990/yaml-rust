@@ -15,7 +15,6 @@ struct YamlTest {
     yaml: String,
     expected_events: String,
     expected_error: bool,
-    is_xfail: bool,
 }
 
 fn main() -> Result<()> {
@@ -32,16 +31,6 @@ fn main() -> Result<()> {
         .collect::<Result<_>>()?;
     let mut tests: Vec<_> = tests.into_iter().flatten().collect();
     tests.sort_by_key(|t| t.name.clone());
-
-    let missing_xfails: Vec<_> = EXPECTED_FAILURES
-        .iter()
-        .filter(|&&test| !tests.iter().any(|t| t.name == test))
-        .collect();
-    assert!(
-        missing_xfails.is_empty(),
-        "The following EXPECTED_FAILURES not found during discovery: {:?}",
-        missing_xfails
-    );
 
     run_tests(&arguments, tests, run_yaml_test).exit();
 }
@@ -80,13 +69,9 @@ fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
         }
     }
 
-    match (error_text, desc.is_xfail) {
-        (None, false) => Outcome::Passed,
-        (Some(txt), false) => Outcome::Failed { msg: Some(txt) },
-        (Some(_), true) => Outcome::Ignored,
-        (None, true) => Outcome::Failed {
-            msg: Some("expected to fail but passes".into()),
-        },
+    match error_text {
+        None => Outcome::Passed,
+        Some(txt) => Outcome::Failed { msg: Some(txt) },
     }
 }
 
@@ -106,7 +91,6 @@ fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
         } else {
             test_name.to_string()
         };
-        let is_xfail = EXPECTED_FAILURES.contains(&name.as_str());
 
         // Test fields except `fail` are "inherited"
         let test_data = test_data.as_hash().unwrap();
@@ -131,7 +115,6 @@ fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
                 yaml: visual_to_raw(current_test["yaml"].as_str().unwrap()),
                 expected_events: visual_to_raw(current_test["tree"].as_str().unwrap()),
                 expected_error: current_test["fail"].as_bool() == Some(true),
-                is_xfail,
             },
         });
     }
@@ -311,9 +294,3 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
         })
         .collect()
 }
-
-#[rustfmt::skip]
-static EXPECTED_FAILURES: &[&str] = &[
-    // Misc
-    "WZ62", // Empty content
-];
