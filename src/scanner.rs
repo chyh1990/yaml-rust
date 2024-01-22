@@ -465,6 +465,24 @@ fn is_anchor_char(c: char) -> bool {
     is_yaml_non_space(c) && !is_flow(c) && !is_z(c)
 }
 
+/// Check whether the character is a valid word character.
+#[inline]
+fn is_word_char(c: char) -> bool {
+    is_alpha(c) && c != '_'
+}
+
+/// Check whether the character is a valid URI character.
+#[inline]
+fn is_uri_char(c: char) -> bool {
+    is_word_char(c) || "#;/?:@&=+$,_.!~*\'()[]%".contains(c)
+}
+
+/// Check whether the character is a valid tag character.
+#[inline]
+fn is_tag_char(c: char) -> bool {
+    is_uri_char(c) && !is_flow(c) && c != '!'
+}
+
 pub type ScanResult = Result<(), ScanError>;
 
 impl<T: Iterator<Item = char>> Scanner<T> {
@@ -1116,8 +1134,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.skip();
         }
 
-        let is_secondary = handle == "!!";
-        let prefix = self.scan_tag_uri(true, is_secondary, "", mark)?;
+        let prefix = self.scan_tag_prefix(mark)?;
 
         self.lookahead(1);
 
@@ -1149,19 +1166,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.lookahead(2);
 
         if self.buffer[1] == '<' {
-            // Eat '!<'
-            self.skip();
-            self.skip();
-            suffix = self.scan_tag_uri(false, false, "", &start_mark)?;
-
-            if self.ch() != '>' {
-                return Err(ScanError::new(
-                    start_mark,
-                    "while scanning a tag, did not find the expected '>'",
-                ));
-            }
-
-            self.skip();
+            suffix = self.scan_verbatim_tag(&start_mark)?;
         } else {
             // The tag has either the '!suffix' or the '!handle!suffix'
             handle = self.scan_tag_handle(false, &start_mark)?;
@@ -1169,9 +1174,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             if handle.len() >= 2 && handle.starts_with('!') && handle.ends_with('!') {
                 // A tag handle starting with "!!" is a secondary tag handle.
                 let is_secondary_handle = handle == "!!";
-                suffix = self.scan_tag_uri(false, is_secondary_handle, "", &start_mark)?;
+                suffix =
+                    self.scan_tag_shorthand_suffix(false, is_secondary_handle, "", &start_mark)?;
             } else {
-                suffix = self.scan_tag_uri(false, false, &handle, &start_mark)?;
+                suffix = self.scan_tag_shorthand_suffix(false, false, &handle, &start_mark)?;
                 handle = "!".to_owned();
                 // A special case: the '!' tag.  Set the handle to '' and the
                 // suffix to '!'.
@@ -1223,9 +1229,70 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(string)
     }
 
-    fn scan_tag_uri(
+    /// Scan for a tag prefix (6.8.2.2).
+    ///
+    /// There are 2 kinds of tag prefixes:
+    ///   - Local: Starts with a `!`, contains only URI chars (`!foo`)
+    ///   - Global: Starts with a tag char, contains then URI chars (`!foo,2000:app/`)
+    fn scan_tag_prefix(&mut self, start_mark: &Marker) -> Result<String, ScanError> {
+        let mut string = String::new();
+
+        if self.look_ch() == '!' {
+            // If we have a local tag, insert and skip `!`.
+            string.push(self.ch_skip());
+        } else if !is_tag_char(self.ch()) {
+            // Otherwise, check if the first global tag character is valid.
+            return Err(ScanError::new(*start_mark, "invalid global tag character"));
+        } else if self.ch() == '%' {
+            // If it is valid and an escape sequence, escape it.
+            string.push(self.scan_uri_escapes(start_mark)?);
+        } else {
+            // Otherwise, push the first character.
+            string.push(self.ch_skip());
+        }
+
+        while is_uri_char(self.look_ch()) {
+            if self.ch() == '%' {
+                string.push(self.scan_uri_escapes(start_mark)?);
+            } else {
+                string.push(self.ch_skip());
+            }
+        }
+
+        Ok(string)
+    }
+
+    /// Scan for a verbatim tag.
+    ///
+    /// The prefixing `!<` must _not_ have been skipped.
+    fn scan_verbatim_tag(&mut self, start_mark: &Marker) -> Result<String, ScanError> {
+        // Eat `!<`
+        self.skip();
+        self.skip();
+
+        let mut string = String::new();
+        while is_uri_char(self.look_ch()) {
+            if self.ch() == '%' {
+                string.push(self.scan_uri_escapes(start_mark)?);
+            } else {
+                string.push(self.ch_skip());
+            }
+        }
+
+        if self.ch() != '>' {
+            return Err(ScanError::new(
+                *start_mark,
+                "while scanning a verbatim tag, did not find the expected '>'",
+            ));
+        }
+        self.skip();
+
+        Ok(string)
+    }
+
+    fn scan_tag_shorthand_suffix(
         &mut self,
-        directive: bool,
+        _directive: bool,
         _is_secondary: bool,
         head: &str,
         mark: &Marker,
@@ -1239,23 +1306,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             string.extend(head.chars().skip(1));
         }
 
-        /*
-         * The set of characters that may appear in URI is as follows:
-         *
-         *      '0'-'9', 'A'-'Z', 'a'-'z', '_', '-', ';', '/', '?', ':', '@', '&',
-         *      '=', '+', '$', ',', '.', '!', '~', '*', '\'', '(', ')', '[', ']',
-         *      '%'.
-         */
-        while match self.look_ch() {
-            ';' | '/' | '?' | ':' | '@' | '&' => true,
-            '=' | '+' | '$' | ',' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' | '[' | ']' => true,
-            '%' => true,
-            c if is_alpha(c) => true,
-            _ => false,
-        } {
+        while is_tag_char(self.look_ch()) {
             // Check if it is a URI-escape sequence.
             if self.ch() == '%' {
-                string.push(self.scan_uri_escapes(directive, mark)?);
+                string.push(self.scan_uri_escapes(mark)?);
             } else {
                 string.push(self.ch());
                 self.skip();
@@ -1274,7 +1328,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(string)
     }
 
-    fn scan_uri_escapes(&mut self, _directive: bool, mark: &Marker) -> Result<char, ScanError> {
+    fn scan_uri_escapes(&mut self, mark: &Marker) -> Result<char, ScanError> {
         let mut width = 0usize;
         let mut code = 0u32;
         loop {

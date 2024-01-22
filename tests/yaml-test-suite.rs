@@ -315,6 +315,5 @@ fn expected_events(expected_tree: &str) -> Vec<String> {
 #[rustfmt::skip]
 static EXPECTED_FAILURES: &[&str] = &[
     // Misc
-    "U99R", // Comma is not allowed in tags
     "WZ62", // Empty content
 ];
