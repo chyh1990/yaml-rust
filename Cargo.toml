@@ -6,7 +6,7 @@ authors = [
   "Ethiraric <ethiraric@gmail.com>"
 ]
 documentation = "https://docs.rs/yaml-rust2"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 description = "A fully YAML 1.2 compliant YAML parser"
 repository = "https://github.com/Ethiraric/yaml-rust2"
 readme = "README.md"
