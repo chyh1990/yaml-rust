@@ -513,20 +513,18 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     //
     // A `\n` is pushed into `s`.
     //
-    // # Panics
+    // # Panics (in debug)
     // If the next characters do not correspond to a line break.
     #[inline]
     fn read_break(&mut self, s: &mut String) {
-        if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
-            s.push('\n');
+        let c = self.buffer[0];
+        debug_assert!(is_break(c));
+        self.skip();
+        if c == '\r' && self.buffer[0] == '\n' {
             self.skip();
-            self.skip();
-        } else if self.buffer[0] == '\r' || self.buffer[0] == '\n' {
-            s.push('\n');
-            self.skip();
-        } else {
-            unreachable!();
         }
+
+        s.push('\n');
     }
 
     /// Check whether the next characters correspond to an end of document.
