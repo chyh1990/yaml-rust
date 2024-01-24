@@ -1661,14 +1661,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Skip the block scalar indentation and empty lines.
     fn skip_block_scalar_indent(&mut self, indent: usize, breaks: &mut String) {
         loop {
+            self.lookahead(indent + 2);
             // Consume all spaces. Tabs cannot be used as indentation.
-            while self.mark.col < indent && self.look_ch() == ' ' {
+            while self.mark.col < indent && self.ch() == ' ' {
                 self.skip();
             }
 
             // If our current line is empty, skip over the break and continue looping.
-            if is_break(self.look_ch()) {
-                self.lookahead(2);
+            if is_break(self.ch()) {
                 self.read_break(breaks);
             } else {
                 // Otherwise, we have a content line. Return control.
