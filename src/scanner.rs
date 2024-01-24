@@ -430,32 +430,58 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
-    /// Consume the next character, remove it from the buffer and update the mark.
+    /// Consume the next character. It is assumed the next character is a blank.
     #[inline]
-    fn skip(&mut self) {
-        let c = self.buffer.pop_front().unwrap();
+    fn skip_blank(&mut self) {
+        self.buffer.pop_front();
 
         self.mark.index += 1;
-        if c == '\n' {
-            self.leading_whitespace = true;
-            self.mark.line += 1;
-            self.mark.col = 0;
-        } else {
-            if self.leading_whitespace && !is_blank(c) {
-                self.leading_whitespace = false;
-            }
-            self.mark.col += 1;
+        self.mark.col += 1;
+    }
+
+    /// Consume the next character. It is assumed the next character is not a blank.
+    #[inline]
+    fn skip_non_blank(&mut self) {
+        self.buffer.pop_front();
+
+        self.mark.index += 1;
+        self.mark.col += 1;
+        self.leading_whitespace = false;
+    }
+
+    /// Consume the next characters. It is assumed none of the next characters are blanks.
+    #[inline]
+    fn skip_n_non_blank(&mut self, n: usize) {
+        for _ in 0..n {
+            self.buffer.pop_front();
         }
+
+        self.mark.index += n;
+        self.mark.col += n;
+        self.leading_whitespace = false;
+    }
+
+    /// Consume the next character. It is assumed the next character is a newline.
+    #[inline]
+    fn skip_nl(&mut self) {
+        self.buffer.pop_front();
+
+        self.mark.index += 1;
+        self.mark.col = 0;
+        self.mark.line += 1;
+        self.leading_whitespace = true;
     }
 
     /// Consume a linebreak (either CR, LF or CRLF), if any. Do nothing if there's none.
     #[inline]
     fn skip_line(&mut self) {
         if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
-            self.skip();
-            self.skip();
+            // While technically not a blank, this does not matter as `self.leading_whitespace`
+            // will be reset by `skip_nl`.
+            self.skip_blank();
+            self.skip_nl();
         } else if is_break(self.buffer[0]) {
-            self.skip();
+            self.skip_nl();
         }
     }
 
@@ -475,16 +501,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn look_ch(&mut self) -> char {
         self.lookahead(1);
         self.ch()
-    }
-
-    /// Consume and return the next character.
-    ///
-    /// Equivalent to calling [`Self::ch`] and [`Self::skip`].
-    #[inline]
-    fn ch_skip(&mut self) -> char {
-        let ret = self.ch();
-        self.skip();
-        ret
     }
 
     /// Return whether the next character is `c`.
@@ -517,11 +533,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     #[inline]
     fn read_break(&mut self, s: &mut String) {
         let c = self.buffer[0];
+        let nc = self.buffer[1];
         debug_assert!(is_break(c));
-        self.skip();
-        if c == '\r' && self.buffer[0] == '\n' {
-            self.skip();
+        if c == '\r' && nc == '\n' {
+            self.skip_blank();
         }
+        self.skip_nl();
 
         s.push('\n');
     }
@@ -731,7 +748,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         loop {
             // TODO(chenyh) BOM
             match self.look_ch() {
-                ' ' => self.skip(),
+                ' ' => self.skip_blank(),
                 // Tabs may not be used as indentation.
                 // "Indentation" only exists as long as a block is started, but does not exist
                 // inside of flow-style constructs. Tabs are allowed as part of leading
@@ -751,7 +768,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         ));
                     }
                 }
-                '\t' => self.skip(),
+                '\t' => self.skip_blank(),
                 '\n' | '\r' => {
                     self.lookahead(2);
                     self.skip_line();
@@ -760,9 +777,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     }
                 }
                 '#' => {
-                    while !is_breakz(self.ch()) {
-                        self.skip();
-                        self.lookahead(1);
+                    while !is_breakz(self.look_ch()) {
+                        self.skip_non_blank();
                     }
                 }
                 _ => break,
@@ -780,7 +796,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         loop {
             match self.look_ch() {
                 ' ' => {
-                    self.skip();
+                    self.skip_blank();
 
                     need_whitespace = false;
                 }
@@ -793,9 +809,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     need_whitespace = false;
                 }
                 '#' => {
-                    while !is_breakz(self.ch()) {
-                        self.skip();
-                        self.lookahead(1);
+                    while !is_breakz(self.look_ch()) {
+                        self.skip_non_blank();
                     }
                 }
                 _ => break,
@@ -817,11 +832,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             match self.look_ch() {
                 ' ' => {
                     has_yaml_ws = true;
-                    self.skip();
+                    self.skip_blank();
                 }
                 '\t' if skip_tabs != SkipTabs::No => {
                     encountered_tab = true;
-                    self.skip();
+                    self.skip_blank();
                 }
                 // YAML comments must be preceded by whitespace.
                 '#' if !encountered_tab && !has_yaml_ws => {
@@ -832,7 +847,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
                 '#' => {
                     while !is_breakz(self.look_ch()) {
-                        self.skip();
+                        self.skip_non_blank();
                     }
                 }
                 _ => break,
@@ -893,7 +908,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     fn scan_directive(&mut self) -> Result<Token, ScanError> {
         let start_mark = self.mark;
-        self.skip();
+        self.skip_non_blank();
 
         let name = self.scan_directive_name()?;
         let tok = match name.as_ref() {
@@ -902,10 +917,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             // XXX This should be a warning instead of an error
             _ => {
                 // skip current line
-                self.lookahead(1);
-                while !is_breakz(self.ch()) {
-                    self.skip();
-                    self.lookahead(1);
+                while !is_breakz(self.look_ch()) {
+                    self.skip_non_blank();
                 }
                 // XXX return an empty TagDirective token
                 Token(
@@ -916,7 +929,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 //     "while scanning a directive, found unknown directive name"))
             }
         };
-        self.lookahead(1);
 
         self.skip_ws_to_eol(SkipTabs::Yes)?;
 
@@ -937,11 +949,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn scan_version_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
-        self.lookahead(1);
-
-        while is_blank(self.ch()) {
-            self.skip();
-            self.lookahead(1);
+        while is_blank(self.look_ch()) {
+            self.skip_blank();
         }
 
         let major = self.scan_version_directive_number(mark)?;
@@ -952,8 +961,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 "while scanning a YAML directive, did not find expected digit or '.' character",
             ));
         }
-
-        self.skip();
+        self.skip_non_blank();
 
         let minor = self.scan_version_directive_number(mark)?;
 
@@ -963,11 +971,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn scan_directive_name(&mut self) -> Result<String, ScanError> {
         let start_mark = self.mark;
         let mut string = String::new();
-        self.lookahead(1);
-        while is_alpha(self.ch()) {
+        while is_alpha(self.look_ch()) {
             string.push(self.ch());
-            self.skip();
-            self.lookahead(1);
+            self.skip_non_blank();
         }
 
         if string.is_empty() {
@@ -999,7 +1005,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
             length += 1;
             val = val * 10 + digit;
-            self.skip();
+            self.skip_non_blank();
         }
 
         if length == 0 {
@@ -1013,17 +1019,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     fn scan_tag_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
-        self.lookahead(1);
         /* Eat whitespaces. */
-        while is_blank(self.ch()) {
-            self.skip();
-            self.lookahead(1);
+        while is_blank(self.look_ch()) {
+            self.skip_blank();
         }
         let handle = self.scan_tag_handle(true, mark)?;
 
         /* Eat whitespaces. */
         while is_blank(self.look_ch()) {
-            self.skip();
+            self.skip_blank();
         }
 
         let prefix = self.scan_tag_prefix(mark)?;
@@ -1100,15 +1104,18 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ));
         }
 
-        string.push(self.ch_skip());
+        string.push(self.ch());
+        self.skip_non_blank();
 
         while is_alpha(self.look_ch()) {
-            string.push(self.ch_skip());
+            string.push(self.ch());
+            self.skip_non_blank();
         }
 
         // Check if the trailing character is '!' and copy it.
         if self.ch() == '!' {
-            string.push(self.ch_skip());
+            string.push(self.ch());
+            self.skip_non_blank();
         } else if directive && string != "!" {
             // It's either the '!' tag or not really a tag handle.  If it's a %TAG
             // directive, it's an error.  If it's a tag token, it must be a part of
@@ -1131,7 +1138,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         if self.look_ch() == '!' {
             // If we have a local tag, insert and skip `!`.
-            string.push(self.ch_skip());
+            string.push(self.ch());
+            self.skip_non_blank();
         } else if !is_tag_char(self.ch()) {
             // Otherwise, check if the first global tag character is valid.
             return Err(ScanError::new(*start_mark, "invalid global tag character"));
@@ -1140,14 +1148,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             string.push(self.scan_uri_escapes(start_mark)?);
         } else {
             // Otherwise, push the first character.
-            string.push(self.ch_skip());
+            string.push(self.ch());
+            self.skip_non_blank();
         }
 
         while is_uri_char(self.look_ch()) {
             if self.ch() == '%' {
                 string.push(self.scan_uri_escapes(start_mark)?);
             } else {
-                string.push(self.ch_skip());
+                string.push(self.ch());
+                self.skip_non_blank();
             }
         }
 
@@ -1159,15 +1169,16 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// The prefixing `!<` must _not_ have been skipped.
     fn scan_verbatim_tag(&mut self, start_mark: &Marker) -> Result<String, ScanError> {
         // Eat `!<`
-        self.skip();
-        self.skip();
+        self.skip_non_blank();
+        self.skip_non_blank();
 
         let mut string = String::new();
         while is_uri_char(self.look_ch()) {
             if self.ch() == '%' {
                 string.push(self.scan_uri_escapes(start_mark)?);
             } else {
-                string.push(self.ch_skip());
+                string.push(self.ch());
+                self.skip_non_blank();
             }
         }
 
@@ -1177,7 +1188,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 "while scanning a verbatim tag, did not find the expected '>'",
             ));
         }
-        self.skip();
+        self.skip_non_blank();
 
         Ok(string)
     }
@@ -1204,7 +1215,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 string.push(self.scan_uri_escapes(mark)?);
             } else {
                 string.push(self.ch());
-                self.skip();
+                self.skip_non_blank();
             }
 
             length += 1;
@@ -1258,9 +1269,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 code = (code << 8) + octet;
             }
 
-            self.skip();
-            self.skip();
-            self.skip();
+            self.skip_n_non_blank(3);
 
             width -= 1;
             if width == 0 {
@@ -1292,10 +1301,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let mut string = String::new();
         let start_mark = self.mark;
 
-        self.skip();
+        self.skip_non_blank();
         while is_anchor_char(self.look_ch()) {
             string.push(self.ch());
-            self.skip();
+            self.skip_non_blank();
         }
 
         if string.is_empty() {
@@ -1319,7 +1328,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.allow_simple_key();
 
         let start_mark = self.mark;
-        self.skip();
+        self.skip_non_blank();
 
         if tok == TokenType::FlowMappingStart {
             self.flow_mapping_started = true;
@@ -1340,7 +1349,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.end_implicit_mapping(self.mark);
 
         let start_mark = self.mark;
-        self.skip();
+        self.skip_non_blank();
         self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         // A flow collection within a flow mapping can be a key. In that case, the value may be
@@ -1364,7 +1373,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.end_implicit_mapping(self.mark);
 
         let start_mark = self.mark;
-        self.skip();
+        self.skip_non_blank();
         self.skip_ws_to_eol(SkipTabs::Yes)?;
 
         self.tokens
@@ -1418,7 +1427,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // Skip over the `-`.
         let mark = self.mark;
-        self.skip();
+        self.skip_non_blank();
 
         // generate BLOCK-SEQUENCE-START if indented
         self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
@@ -1452,9 +1461,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         let mark = self.mark;
 
-        self.skip();
-        self.skip();
-        self.skip();
+        self.skip_n_non_blank(3);
 
         self.tokens.push_back(Token(mark, t));
         Ok(())
@@ -1489,7 +1496,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let mut chomping_break = String::new();
 
         // skip '|' or '>'
-        self.skip();
+        self.skip_non_blank();
         self.unroll_non_block_indents();
 
         if self.look_ch() == '+' || self.ch() == '-' {
@@ -1498,7 +1505,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             } else {
                 chomping = Chomping::Strip;
             }
-            self.skip();
+            self.skip_non_blank();
             if is_digit(self.look_ch()) {
                 if self.ch() == '0' {
                     return Err(ScanError::new(
@@ -1507,7 +1514,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     ));
                 }
                 increment = (self.ch() as usize) - ('0' as usize);
-                self.skip();
+                self.skip_non_blank();
             }
         } else if is_digit(self.ch()) {
             if self.ch() == '0' {
@@ -1518,7 +1525,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
 
             increment = (self.ch() as usize) - ('0' as usize);
-            self.skip();
+            self.skip_non_blank();
             self.lookahead(1);
             if self.ch() == '+' || self.ch() == '-' {
                 if self.ch() == '+' {
@@ -1526,7 +1533,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 } else {
                     chomping = Chomping::Strip;
                 }
-                self.skip();
+                self.skip_non_blank();
             }
         }
 
@@ -1622,10 +1629,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
             leading_blank = is_blank(self.ch());
 
-            while !is_breakz(self.ch()) {
+            while !is_breakz(self.look_ch()) {
                 string.push(self.ch());
-                self.skip();
-                self.lookahead(1);
+                // We may technically skip non-blank characters. However, the only distinction is
+                // to determine what is leading whitespace and what is not. Here, we read the
+                // contents of the line until either eof or a linebreak. We know we will not read
+                // `self.leading_whitespace` until the end of the line, where it will be reset.
+                // This allows us to call a slightly less expensive function.
+                self.skip_blank();
             }
             // break on EOF
             if is_z(self.ch()) {
@@ -1663,7 +1674,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.lookahead(indent + 2);
             // Consume all spaces. Tabs cannot be used as indentation.
             while self.mark.col < indent && self.ch() == ' ' {
-                self.skip();
+                self.skip_blank();
             }
 
             // If our current line is empty, skip over the break and continue looping.
@@ -1685,14 +1696,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         loop {
             // Consume all spaces. Tabs cannot be used as indentation.
             while self.look_ch() == ' ' {
-                self.skip();
+                self.skip_blank();
             }
 
             if self.mark.col > max_indent {
                 max_indent = self.mark.col;
             }
 
-            if is_break(self.look_ch()) {
+            if is_break(self.ch()) {
                 // If our current line is empty, skip over the break and continue looping.
                 self.lookahead(2);
                 self.read_break(breaks);
@@ -1742,7 +1753,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let mut leading_blanks;
 
         /* Eat the left quote. */
-        self.skip();
+        self.skip_non_blank();
 
         loop {
             /* Check for a document indicator. */
@@ -1800,10 +1811,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                                 "tab cannot be used as indentation",
                             ));
                         }
-                        self.skip();
+                        self.skip_blank();
                     } else {
                         whitespaces.push(self.ch());
-                        self.skip();
+                        self.skip_blank();
                     }
                 } else {
                     self.lookahead(2);
@@ -1842,7 +1853,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         } // loop
 
         // Eat the right quote.
-        self.skip();
+        self.skip_non_blank();
         // Ensure there is no invalid trailing content.
         self.skip_ws_to_eol(SkipTabs::Yes)?;
         match self.ch() {
@@ -1892,8 +1903,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 // Check for an escaped single quote.
                 '\'' if self.buffer[1] == '\'' && single => {
                     string.push('\'');
-                    self.skip();
-                    self.skip();
+                    self.skip_n_non_blank(2);
                 }
                 // Check for the right quote.
                 '\'' if single => break,
@@ -1901,7 +1911,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 // Check for an escaped line break.
                 '\\' if !single && is_break(self.buffer[1]) => {
                     self.lookahead(3);
-                    self.skip();
+                    self.skip_non_blank();
                     self.skip_line();
                     *leading_blanks = true;
                     break;
@@ -1912,7 +1922,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
                 c => {
                     string.push(c);
-                    self.skip();
+                    self.skip_non_blank();
                 }
             }
             self.lookahead(2);
@@ -1965,8 +1975,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ))
             }
         }
-        self.skip();
-        self.skip();
+        self.skip_n_non_blank(2);
 
         // Consume an arbitrary escape code.
         if code_length > 0 {
@@ -1990,9 +1999,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             };
             ret = ch;
 
-            for _ in 0..code_length {
-                self.skip();
-            }
+            self.skip_n_non_blank(code_length);
         }
         Ok(ret)
     }
@@ -2086,7 +2093,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
 
                 string.push(self.ch());
-                self.skip();
+                self.skip_non_blank();
                 self.lookahead(2);
             }
             // is the end?
@@ -2112,7 +2119,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     if !leading_blanks {
                         whitespaces.push(self.ch());
                     }
-                    self.skip();
+                    self.skip_blank();
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break
@@ -2171,7 +2178,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.disallow_simple_key();
         }
 
-        self.skip();
+        self.skip_non_blank();
         self.skip_yaml_whitespace()?;
         if self.ch() == '\t' {
             return Err(ScanError::new(
@@ -2190,7 +2197,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.implicit_flow_mapping = self.flow_level > 0 && !self.flow_mapping_started;
 
         // Skip over ':'.
-        self.skip();
+        self.skip_non_blank();
         if self.look_ch() == '\t'
             && !self.skip_ws_to_eol(SkipTabs::Yes)?.has_valid_yaml_ws()
             && (self.ch() == '-' || is_alpha(self.ch()))
