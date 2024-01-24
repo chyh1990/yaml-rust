@@ -503,15 +503,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.ch()
     }
 
-    /// Read a character from the input stream, place it in the buffer and return it.
+    /// Read a character from the input stream, returning it directly.
     ///
-    /// No character is consumed. The character returned is the one at the back of the buffer (the
-    /// one we just read from the input stream).
+    /// The buffer is bypassed and `self.mark` would need to be updated manually.
     #[inline]
-    fn read_ch(&mut self) -> char {
-        let c = self.rdr.next().unwrap_or('\0');
-        self.buffer.push_back(c);
-        c
+    #[must_use]
+    fn raw_read_ch(&mut self) -> char {
+        self.rdr.next().unwrap_or('\0')
     }
 
     /// Return whether the next character is `c`.
@@ -1614,6 +1612,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ));
         }
 
+        let mut line_buffer = String::with_capacity(100);
         let start_mark = self.mark;
         while self.mark.col == indent && !is_z(self.ch()) {
             if indent == 0 {
@@ -1640,34 +1639,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
             leading_blank = is_blank(self.ch());
 
-            // Start by evaluating characters in the buffer.
-            while !self.buffer.is_empty() && !is_breakz(self.ch()) {
-                string.push(self.ch());
-                // We may technically skip non-blank characters. However, the only distinction is
-                // to determine what is leading whitespace and what is not. Here, we read the
-                // contents of the line until either eof or a linebreak. We know we will not read
-                // `self.leading_whitespace` until the end of the line, where it will be reset.
-                // This allows us to call a slightly less expensive function.
-                self.skip_blank();
-            }
-
-            // All characters that were in the buffer were consumed. We need to check if more
-            // follow.
-            if self.buffer.is_empty() {
-                // We will read all consecutive non-breakz characters into `self.buffer` before
-                // pushing them all in `string` instead of moving them one by one.
-                while !is_breakz(self.read_ch()) {}
-                // The last character from the buffer is a breakz. We must not insert it.
-                let last_char = self.buffer.pop_back().unwrap();
-                // We need to manually update our position; we won't call a `skip` function.
-                self.mark.col += self.buffer.len();
-                self.mark.index += self.buffer.len();
-                string.reserve(self.buffer.len());
-                string.extend(self.buffer.iter());
-                // Put back our breakz character, we didn't consume this one.
-                self.buffer.clear();
-                self.buffer.push_back(last_char);
-            }
+            self.scan_block_scalar_content_line(&mut string, &mut line_buffer);
 
             // break on EOF
             if is_z(self.ch()) {
@@ -1697,6 +1669,58 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
 
         Ok(Token(start_mark, TokenType::Scalar(style, string)))
+    }
+
+    /// Retrieve the contents of the line, parsing it as a block scalar.
+    ///
+    /// The contents will be appended to `string`. `line_buffer` is used as a temporary buffer to
+    /// store bytes before pushing them to `string` and thus avoiding reallocating more than
+    /// necessary. `line_buffer` is assumed to be empty upon calling this function. It will be
+    /// `clear`ed before the end of the function.
+    ///
+    /// This function assumed the first character to read is the first content character in the
+    /// line. This function does not consume the line break character(s) after the line.
+    fn scan_block_scalar_content_line(&mut self, string: &mut String, line_buffer: &mut String) {
+        // Start by evaluating characters in the buffer.
+        while !self.buffer.is_empty() && !is_breakz(self.ch()) {
+            string.push(self.ch());
+            // We may technically skip non-blank characters. However, the only distinction is
+            // to determine what is leading whitespace and what is not. Here, we read the
+            // contents of the line until either eof or a linebreak. We know we will not read
+            // `self.leading_whitespace` until the end of the line, where it will be reset.
+            // This allows us to call a slightly less expensive function.
+            self.skip_blank();
+        }
+
+        // All characters that were in the buffer were consumed. We need to check if more
+        // follow.
+        if self.buffer.is_empty() {
+            // We will read all consecutive non-breakz characters. We push them into a
+            // temporary buffer. The main difference with going through `self.buffer` is that
+            // characters are appended here as their real size (1B for ascii, or up to 4 bytes for
+            // UTF-8). We can then use the internal `line_buffer` `Vec` to push data into `string`
+            // (using `String::push_str`).
+            let mut c = self.raw_read_ch();
+            while !is_breakz(c) {
+                line_buffer.push(c);
+                c = self.raw_read_ch();
+            }
+
+            // Our last character read is stored in `c`. It is either an EOF or a break. In any
+            // case, we need to push it back into `self.buffer` so it may be properly read
+            // after. We must not insert it in `string`.
+            self.buffer.push_back(c);
+
+            // We need to manually update our position; we haven't called a `skip` function.
+            self.mark.col += line_buffer.len();
+            self.mark.index += line_buffer.len();
+
+            // We can now append our bytes to our `string`.
+            string.reserve(line_buffer.as_bytes().len());
+            string.push_str(line_buffer);
+            // This clears the _contents_ without touching the _capacity_.
+            line_buffer.clear();
+        }
     }
 
     /// Skip the block scalar indentation and empty lines.
