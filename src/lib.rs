@@ -45,6 +45,7 @@
 
 extern crate linked_hash_map;
 
+pub(crate) mod char_traits;
 pub mod emitter;
 pub mod parser;
 pub mod scanner;

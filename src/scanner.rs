@@ -1,9 +1,12 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::collections::VecDeque;
-use std::error::Error;
-use std::{char, fmt};
+use std::{char, collections::VecDeque, error::Error, fmt};
+
+use crate::char_traits::{
+    as_hex, is_alpha, is_anchor_char, is_blank, is_blankz, is_break, is_breakz, is_digit, is_flow,
+    is_hex, is_tag_char, is_uri_char, is_z,
+};
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TEncoding {
@@ -24,8 +27,11 @@ pub enum TScalarStyle {
 /// A location in a yaml document.
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub struct Marker {
+    /// The index (in chars) in the input string.
     index: usize,
+    /// The line (1-indexed).
     line: usize,
+    /// The column (1-indexed).
     col: usize,
 }
 
@@ -56,7 +62,9 @@ impl Marker {
 /// An error that occured while scanning.
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub struct ScanError {
+    /// The position at which the error happened in the source.
     mark: Marker,
+    /// Human-readable details about the error.
     info: String,
 }
 
@@ -371,116 +379,6 @@ impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
             }
         }
     }
-}
-
-/// Check whether the character is nil (`\0`).
-#[inline]
-fn is_z(c: char) -> bool {
-    c == '\0'
-}
-
-/// Check whether the character is a line break (`\r` or `\n`).
-#[inline]
-fn is_break(c: char) -> bool {
-    c == '\n' || c == '\r'
-}
-
-/// Check whether the character is nil or a line break (`\0`, `\r`, `\n`).
-#[inline]
-fn is_breakz(c: char) -> bool {
-    is_break(c) || is_z(c)
-}
-
-/// Check whether the character is a whitespace (` ` or `\t`).
-#[inline]
-fn is_blank(c: char) -> bool {
-    c == ' ' || c == '\t'
-}
-
-/// Check whether the character is nil, a linebreak or a whitespace.
-///
-/// `\0`, ` `, `\t`, `\n`, `\r`
-#[inline]
-fn is_blankz(c: char) -> bool {
-    is_blank(c) || is_breakz(c)
-}
-
-/// Check whether the character is an ascii digit.
-#[inline]
-fn is_digit(c: char) -> bool {
-    c.is_ascii_digit()
-}
-
-/// Check whether the character is a digit, letter, `_` or `-`.
-#[inline]
-fn is_alpha(c: char) -> bool {
-    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | '_' | '-')
-}
-
-/// Check whether the character is a hexadecimal character (case insensitive).
-#[inline]
-fn is_hex(c: char) -> bool {
-    c.is_ascii_digit() || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
-}
-
-/// Convert the hexadecimal digit to an integer.
-#[inline]
-fn as_hex(c: char) -> u32 {
-    match c {
-        '0'..='9' => (c as u32) - ('0' as u32),
-        'a'..='f' => (c as u32) - ('a' as u32) + 10,
-        'A'..='F' => (c as u32) - ('A' as u32) + 10,
-        _ => unreachable!(),
-    }
-}
-
-/// Check whether the character is a YAML flow character (one of `,[]{}`).
-#[inline]
-fn is_flow(c: char) -> bool {
-    matches!(c, ',' | '[' | ']' | '{' | '}')
-}
-
-/// Check whether the character is the BOM character.
-#[inline]
-fn is_bom(c: char) -> bool {
-    c == '\u{FEFF}'
-}
-
-/// Check whether the character is a YAML non-breaking character.
-#[inline]
-fn is_yaml_non_break(c: char) -> bool {
-    // TODO(ethiraric, 28/12/2023): is_printable
-    !is_break(c) && !is_bom(c)
-}
-
-/// Check whether the character is NOT a YAML whitespace (` ` / `\t`).
-#[inline]
-fn is_yaml_non_space(c: char) -> bool {
-    is_yaml_non_break(c) && !is_blank(c)
-}
-
-/// Check whether the character is a valid YAML anchor name character.
-#[inline]
-fn is_anchor_char(c: char) -> bool {
-    is_yaml_non_space(c) && !is_flow(c) && !is_z(c)
-}
-
-/// Check whether the character is a valid word character.
-#[inline]
-fn is_word_char(c: char) -> bool {
-    is_alpha(c) && c != '_'
-}
-
-/// Check whether the character is a valid URI character.
-#[inline]
-fn is_uri_char(c: char) -> bool {
-    is_word_char(c) || "#;/?:@&=+$,_.!~*\'()[]%".contains(c)
-}
-
-/// Check whether the character is a valid tag character.
-#[inline]
-fn is_tag_char(c: char) -> bool {
-    is_uri_char(c) && !is_flow(c) && c != '!'
 }
 
 pub type ScanResult = Result<(), ScanError>;
