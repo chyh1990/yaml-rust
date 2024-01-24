@@ -413,9 +413,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
     fn state_machine(&mut self) -> ParseResult {
         // let next_tok = self.peek_token().cloned()?;
         // println!("cur_state {:?}, next tok: {:?}", self.state, next_tok);
-        if std::env::var("YAMLRUST_DEBUG").is_ok() {
-            eprintln!("\n\x1B[;33mParser state: {:?} \x1B[;0m", self.state);
-        }
+        debug_print!("\n\x1B[;33mParser state: {:?} \x1B[;0m", self.state);
+
         match self.state {
             State::StreamStart => self.stream_start(),
 
