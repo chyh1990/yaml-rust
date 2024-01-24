@@ -441,7 +441,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             self.mark.line += 1;
             self.mark.col = 0;
         } else {
-            // TODO(ethiraric, 20/12/2023): change to `self.leading_whitespace &= is_blank(c)`?
             if self.leading_whitespace && !is_blank(c) {
                 self.leading_whitespace = false;
             }
