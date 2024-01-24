@@ -503,6 +503,17 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.ch()
     }
 
+    /// Read a character from the input stream, place it in the buffer and return it.
+    ///
+    /// No character is consumed. The character returned is the one at the back of the buffer (the
+    /// one we just read from the input stream).
+    #[inline]
+    fn read_ch(&mut self) -> char {
+        let c = self.rdr.next().unwrap_or('\0');
+        self.buffer.push_back(c);
+        c
+    }
+
     /// Return whether the next character is `c`.
     #[inline]
     fn ch_is(&self, c: char) -> bool {
@@ -1612,24 +1623,25 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
             }
 
-            // We are at the beginning of a non-empty line.
+            // We are at the first content character of a content line.
             trailing_blank = is_blank(self.ch());
             if !literal && !leading_break.is_empty() && !leading_blank && !trailing_blank {
+                string.push_str(&trailing_breaks);
                 if trailing_breaks.is_empty() {
                     string.push(' ');
                 }
-                leading_break.clear();
             } else {
                 string.push_str(&leading_break);
-                leading_break.clear();
+                string.push_str(&trailing_breaks);
             }
 
-            string.push_str(&trailing_breaks);
+            leading_break.clear();
             trailing_breaks.clear();
 
             leading_blank = is_blank(self.ch());
 
-            while !is_breakz(self.look_ch()) {
+            // Start by evaluating characters in the buffer.
+            while !self.buffer.is_empty() && !is_breakz(self.ch()) {
                 string.push(self.ch());
                 // We may technically skip non-blank characters. However, the only distinction is
                 // to determine what is leading whitespace and what is not. Here, we read the
@@ -1638,6 +1650,25 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 // This allows us to call a slightly less expensive function.
                 self.skip_blank();
             }
+
+            // All characters that were in the buffer were consumed. We need to check if more
+            // follow.
+            if self.buffer.is_empty() {
+                // We will read all consecutive non-breakz characters into `self.buffer` before
+                // pushing them all in `string` instead of moving them one by one.
+                while !is_breakz(self.read_ch()) {}
+                // The last character from the buffer is a breakz. We must not insert it.
+                let last_char = self.buffer.pop_back().unwrap();
+                // We need to manually update our position; we won't call a `skip` function.
+                self.mark.col += self.buffer.len();
+                self.mark.index += self.buffer.len();
+                string.reserve(self.buffer.len());
+                string.extend(self.buffer.iter());
+                // Put back our breakz character, we didn't consume this one.
+                self.buffer.clear();
+                self.buffer.push_back(last_char);
+            }
+
             // break on EOF
             if is_z(self.ch()) {
                 break;
