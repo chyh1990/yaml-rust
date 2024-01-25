@@ -28,7 +28,7 @@ pub(crate) fn is_blank(c: char) -> bool {
 ///
 /// `\0`, ` `, `\t`, `\n`, `\r`
 #[inline]
-pub(crate) fn is_blankz(c: char) -> bool {
+pub(crate) fn is_blank_or_breakz(c: char) -> bool {
     is_blank(c) || is_breakz(c)
 }
 

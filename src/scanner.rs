@@ -4,8 +4,8 @@
 use std::{char, collections::VecDeque, error::Error, fmt};
 
 use crate::char_traits::{
-    as_hex, is_alpha, is_anchor_char, is_blank, is_blankz, is_break, is_breakz, is_digit, is_flow,
-    is_hex, is_tag_char, is_uri_char, is_z,
+    as_hex, is_alpha, is_anchor_char, is_blank, is_blank_or_breakz, is_break, is_breakz, is_digit,
+    is_flow, is_hex, is_tag_char, is_uri_char, is_z,
 };
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
@@ -505,7 +505,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     /// Read a character from the input stream, returning it directly.
     ///
-    /// The buffer is bypassed and `self.mark` would need to be updated manually.
+    /// The buffer is bypassed and `self.mark` needs to be updated manually.
     #[inline]
     #[must_use]
     fn raw_read_ch(&mut self) -> char {
@@ -559,7 +559,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.buffer[0] == '.'
             && self.buffer[1] == '.'
             && self.buffer[2] == '.'
-            && is_blankz(self.buffer[3])
+            && is_blank_or_breakz(self.buffer[3])
     }
 
     /// Insert a token at the given position.
@@ -614,7 +614,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             && self.buffer[0] == '-'
             && self.buffer[1] == '-'
             && self.buffer[2] == '-'
-            && is_blankz(self.buffer[3])
+            && is_blank_or_breakz(self.buffer[3])
         {
             self.fetch_document_indicator(TokenType::DocumentStart)?;
             return Ok(());
@@ -624,7 +624,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             && self.buffer[0] == '.'
             && self.buffer[1] == '.'
             && self.buffer[2] == '.'
-            && is_blankz(self.buffer[3])
+            && is_blank_or_breakz(self.buffer[3])
         {
             self.fetch_document_indicator(TokenType::DocumentEnd)?;
             self.skip_ws_to_eol(SkipTabs::Yes)?;
@@ -649,9 +649,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ']' => self.fetch_flow_collection_end(TokenType::FlowSequenceEnd),
             '}' => self.fetch_flow_collection_end(TokenType::FlowMappingEnd),
             ',' => self.fetch_flow_entry(),
-            '-' if is_blankz(nc) => self.fetch_block_entry(),
-            '?' if is_blankz(nc) => self.fetch_key(),
-            ':' if is_blankz(nc)
+            '-' if is_blank_or_breakz(nc) => self.fetch_block_entry(),
+            '?' if is_blank_or_breakz(nc) => self.fetch_key(),
+            ':' if is_blank_or_breakz(nc)
                 || (self.flow_level > 0
                     && (is_flow(nc) || self.mark.index == self.adjacent_value_allowed_at)) =>
             {
@@ -669,8 +669,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             '\'' => self.fetch_flow_scalar(true),
             '"' => self.fetch_flow_scalar(false),
             // plain scalar
-            '-' if !is_blankz(nc) => self.fetch_plain_scalar(),
-            ':' | '?' if !is_blankz(nc) && self.flow_level == 0 => self.fetch_plain_scalar(),
+            '-' if !is_blank_or_breakz(nc) => self.fetch_plain_scalar(),
+            ':' | '?' if !is_blank_or_breakz(nc) && self.flow_level == 0 => {
+                self.fetch_plain_scalar()
+            }
             '%' | '@' | '`' => Err(ScanError::new(
                 self.mark,
                 &format!("unexpected character: `{c}'"),
@@ -992,7 +994,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ));
         }
 
-        if !is_blankz(self.ch()) {
+        if !is_blank_or_breakz(self.ch()) {
             return Err(ScanError::new(
                 start_mark,
                 "while scanning a directive, found unexpected non-alphabetical character",
@@ -1043,7 +1045,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         self.lookahead(1);
 
-        if is_blankz(self.ch()) {
+        if is_blank_or_breakz(self.ch()) {
             Ok(Token(*mark, TokenType::TagDirective(handle, prefix)))
         } else {
             Err(ScanError::new(
@@ -1093,7 +1095,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        if is_blankz(self.look_ch()) || (self.flow_level > 0 && is_flow(self.ch())) {
+        if is_blank_or_breakz(self.look_ch()) || (self.flow_level > 0 && is_flow(self.ch())) {
             // XXX: ex 7.2, an empty scalar can follow a secondary tag
             Ok(Token(start_mark, TokenType::Tag(handle, suffix)))
         } else {
@@ -1442,7 +1444,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
         let found_tabs = self.skip_ws_to_eol(SkipTabs::Yes)?.found_tabs();
         self.lookahead(2);
-        if found_tabs && self.buffer[0] == '-' && is_blankz(self.buffer[1]) {
+        if found_tabs && self.buffer[0] == '-' && is_blank_or_breakz(self.buffer[1]) {
             return Err(ScanError::new(
                 self.mark,
                 "'-' must be followed by a valid YAML whitespace",
@@ -1819,7 +1821,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     || ((self.buffer[0] == '.')
                         && (self.buffer[1] == '.')
                         && (self.buffer[2] == '.')))
-                && is_blankz(self.buffer[3])
+                && is_blank_or_breakz(self.buffer[3])
             {
                 return Err(ScanError::new(
                     start_mark,
@@ -1953,7 +1955,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         start_mark: &Marker,
     ) -> Result<(), ScanError> {
         self.lookahead(2);
-        while !is_blankz(self.ch()) {
+        while !is_blank_or_breakz(self.ch()) {
             match self.ch() {
                 // Check for an escaped single quote.
                 '\'' if self.buffer[1] == '\'' && single => {
@@ -2069,6 +2071,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(())
     }
 
+    /// Scan for a plain scalar.
+    ///
+    /// Plain scalars are the most readable but restricted style. They may span multiple lines in
+    /// some contexts.
     #[allow(clippy::too_many_lines)]
     fn scan_plain_scalar(&mut self) -> Result<Token, ScanError> {
         self.unroll_non_block_indents();
@@ -2086,7 +2092,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         let mut leading_break = String::new();
         let mut trailing_breaks = String::new();
         let mut whitespaces = String::new();
-        let mut leading_blanks = true;
 
         loop {
             /* Check for a document indicator. */
@@ -2096,7 +2101,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     || ((self.buffer[0] == '.')
                         && (self.buffer[1] == '.')
                         && (self.buffer[2] == '.')))
-                && is_blankz(self.buffer[3])
+                && is_blank_or_breakz(self.buffer[3])
             {
                 break;
             }
@@ -2112,78 +2117,79 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ));
             }
 
-            while !is_blankz(self.ch()) {
-                // indicators can end a plain scalar, see 7.3.3. Plain Style
-                match self.ch() {
-                    ':' if is_blankz(self.buffer[1])
-                        || (self.flow_level > 0 && is_flow(self.buffer[1])) =>
-                    {
-                        break;
-                    }
-                    c if is_flow(c) && self.flow_level > 0 => break,
-                    _ => {}
-                }
-
-                if leading_blanks || !whitespaces.is_empty() {
-                    if leading_blanks {
-                        if leading_break.is_empty() {
-                            string.push_str(&leading_break);
+            if !is_blank_or_breakz(self.ch())
+                && self.next_can_be_plain_scalar()
+                && (self.leading_whitespace || !whitespaces.is_empty())
+            {
+                if self.leading_whitespace {
+                    if leading_break.is_empty() {
+                        string.push_str(&leading_break);
+                        string.push_str(&trailing_breaks);
+                        trailing_breaks.clear();
+                        leading_break.clear();
+                    } else {
+                        if trailing_breaks.is_empty() {
+                            string.push(' ');
+                        } else {
                             string.push_str(&trailing_breaks);
                             trailing_breaks.clear();
-                            leading_break.clear();
-                        } else {
-                            if trailing_breaks.is_empty() {
-                                string.push(' ');
-                            } else {
-                                string.push_str(&trailing_breaks);
-                                trailing_breaks.clear();
-                            }
-                            leading_break.clear();
                         }
-                        leading_blanks = false;
-                    } else {
-                        string.push_str(&whitespaces);
-                        whitespaces.clear();
+                        leading_break.clear();
                     }
+                    self.leading_whitespace = false;
+                } else {
+                    string.push_str(&whitespaces);
+                    whitespaces.clear();
+                }
+            }
+
+            // Add content non-blank characters to the scalar.
+            while !is_blank_or_breakz(self.ch()) {
+                if !self.next_can_be_plain_scalar() {
+                    break;
                 }
 
                 string.push(self.ch());
                 self.skip_non_blank();
                 self.lookahead(2);
             }
-            // is the end?
+
+            // We may reach the end of a plain scalar if:
+            //  - We reach eof
+            //  - We reach ": "
+            //  - We find a flow character in a flow context
             if !(is_blank(self.ch()) || is_break(self.ch())) {
                 break;
             }
 
+            // Process blank characters.
             while is_blank(self.look_ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
-                    if leading_blanks && (self.mark.col as isize) < indent && self.ch() == '\t' {
-                        // If our line contains only whitespace, this is not an error.
-                        // Skip over it.
+                    if !self.leading_whitespace {
+                        whitespaces.push(self.ch());
+                        self.skip_blank();
+                    } else if (self.mark.col as isize) < indent && self.ch() == '\t' {
+                        // Tabs in an indentation columns are allowed if and only if the line is
+                        // empty. Skip to the end of the line.
                         self.skip_ws_to_eol(SkipTabs::Yes)?;
-                        if is_breakz(self.ch()) {
-                            continue;
-                        }
+                        if !is_breakz(self.ch()) {
                         return Err(ScanError::new(
                             start_mark,
                             "while scanning a plain scalar, found a tab",
                         ));
+                        }
+                    } else {
+                        self.skip_blank();
                     }
-
-                    if !leading_blanks {
-                        whitespaces.push(self.ch());
-                    }
-                    self.skip_blank();
                 } else {
                     self.lookahead(2);
                     // Check if it is a first line break
-                    if leading_blanks {
+                    if self.leading_whitespace {
                         self.read_break(&mut trailing_breaks);
                     } else {
                         whitespaces.clear();
                         self.read_break(&mut leading_break);
-                        leading_blanks = true;
+                        self.leading_whitespace = true;
                     }
                 }
             }
@@ -2194,7 +2200,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        if leading_blanks {
+        if self.leading_whitespace {
             self.allow_simple_key();
         }
 
@@ -2430,6 +2436,25 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         last.possible = false;
         Ok(())
+    }
+
+    /// Check whether the next characters may be part of a plain scalar.
+    ///
+    /// This function assumes we are not given a blankz character.
+    // For some reason, `#[inline]` is not enough.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn next_can_be_plain_scalar(&self) -> bool {
+        match self.ch() {
+            // indicators can end a plain scalar, see 7.3.3. Plain Style
+            ':' if is_blank_or_breakz(self.buffer[1])
+                || (self.flow_level > 0 && is_flow(self.buffer[1])) =>
+            {
+                false
+            }
+            c if self.flow_level > 0 && is_flow(c) => false,
+            _ => true,
+        }
     }
 
     /// Return whether the scanner is inside a block but outside of a flow sequence.
