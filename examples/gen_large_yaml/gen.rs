@@ -120,6 +120,12 @@ pub fn name(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
     ret
 }
 
+/// Generate a set of words.
+pub fn words(rng: &mut ThreadRng, words_lo: usize, words_hi: usize) -> String {
+    let nwords = rng.gen_range(words_lo..words_hi);
+    lipsum::lipsum_words_with_rng(rng.clone(), nwords).replace(|c| "-\'\",*:".contains(c), "")
+}
+
 /// Generate a lipsum text.
 ///
 /// Texts are composed of some paragraphs and empty lines between them.

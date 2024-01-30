@@ -9,7 +9,7 @@ use rand::{rngs::ThreadRng, Rng};
 fn main() -> std::fmt::Result {
     let mut s = String::new();
     let mut g = Generator::new();
-    g.gen_record_array(&mut s, 100_000, 100_001)?;
+    g.gen_strings_array(&mut s, 1_300_000, 1_300_001, 10, 40)?;
     println!("{s}");
     Ok(())
 }
@@ -43,9 +43,25 @@ impl Generator {
         self.gen_array(writer, items_lo, items_hi, Generator::gen_record_object)
     }
 
+    /// Generate an array of strings.
+    fn gen_strings_array<W: std::fmt::Write>(
+        &mut self,
+        writer: &mut W,
+        items_lo: usize,
+        items_hi: usize,
+        words_lo: usize,
+        words_hi: usize,
+    ) -> std::fmt::Result {
+        self.gen_array(writer, items_lo, items_hi, |gen, writer| {
+            write!(writer, "{}", gen::words(&mut gen.rng, words_lo, words_hi))
+        })
+    }
+
     /// Generate a YAML object/mapping containing a record.
     ///
     /// Fields are description, hash, version, home, repository and pdf.
+    /// The `description` field is a long string and puts a lot of weight in plain scalar / block
+    /// scalar parsing.
     fn gen_record_object<W: std::fmt::Write>(&mut self, writer: &mut W) -> std::fmt::Result {
         let mut fields = HashMap::<String, Box<GenFn<W>>>::new();
         fields.insert(
