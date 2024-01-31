@@ -452,9 +452,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Consume the next characters. It is assumed none of the next characters are blanks.
     #[inline]
     fn skip_n_non_blank(&mut self, n: usize) {
-        for _ in 0..n {
-            self.buffer.pop_front();
-        }
+        self.buffer.drain(0..n);
 
         self.mark.index += n;
         self.mark.col += n;
@@ -556,9 +554,22 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     ///
     /// [`Self::lookahead`] must have been called before calling this function.
     fn next_is_document_end(&self) -> bool {
+        assert!(self.buffer.len() >= 4);
         self.buffer[0] == '.'
             && self.buffer[1] == '.'
             && self.buffer[2] == '.'
+            && is_blank_or_breakz(self.buffer[3])
+    }
+
+    /// Check whether the next characters correspond to a document indicator.
+    ///
+    /// [`Self::lookahead`] must have been called before calling this function.
+    #[inline]
+    fn next_is_document_indicator(&self) -> bool {
+        assert!(self.buffer.len() >= 4);
+        self.mark.col == 0
+            && (((self.buffer[0] == '-') && (self.buffer[1] == '-') && (self.buffer[2] == '-'))
+                || ((self.buffer[0] == '.') && (self.buffer[1] == '.') && (self.buffer[2] == '.')))
             && is_blank_or_breakz(self.buffer[3])
     }
 
@@ -2088,25 +2099,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ));
         }
 
-        let mut string = String::new();
-        let mut leading_break = String::new();
-        let mut trailing_breaks = String::new();
-        let mut whitespaces = String::new();
+        let mut string = String::with_capacity(32);
+        let mut leading_break = String::with_capacity(32);
+        let mut trailing_breaks = String::with_capacity(32);
+        let mut whitespaces = String::with_capacity(32);
 
         loop {
-            /* Check for a document indicator. */
             self.lookahead(4);
-            if self.mark.col == 0
-                && (((self.buffer[0] == '-') && (self.buffer[1] == '-') && (self.buffer[2] == '-'))
-                    || ((self.buffer[0] == '.')
-                        && (self.buffer[1] == '.')
-                        && (self.buffer[2] == '.')))
-                && is_blank_or_breakz(self.buffer[3])
-            {
-                break;
-            }
-
-            if self.ch() == '#' {
+            if self.next_is_document_indicator() || self.ch() == '#' {
                 break;
             }
 
@@ -2117,10 +2117,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ));
             }
 
-            if !is_blank_or_breakz(self.ch())
-                && self.next_can_be_plain_scalar()
-                && (self.leading_whitespace || !whitespaces.is_empty())
-            {
+            if !is_blank_or_breakz(self.ch()) && self.next_can_be_plain_scalar() {
                 if self.leading_whitespace {
                     if leading_break.is_empty() {
                         string.push_str(&leading_break);
@@ -2137,21 +2134,26 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         leading_break.clear();
                     }
                     self.leading_whitespace = false;
-                } else {
+                } else if !whitespaces.is_empty() {
                     string.push_str(&whitespaces);
                     whitespaces.clear();
                 }
-            }
 
-            // Add content non-blank characters to the scalar.
-            while !is_blank_or_breakz(self.ch()) {
-                if !self.next_can_be_plain_scalar() {
-                    break;
-                }
-
+                // We can unroll the first iteration of the loop.
                 string.push(self.ch());
                 self.skip_non_blank();
                 self.lookahead(2);
+
+                // Add content non-blank characters to the scalar.
+                while !is_blank_or_breakz(self.ch()) {
+                    if !self.next_can_be_plain_scalar() {
+                        break;
+                    }
+
+                    string.push(self.ch());
+                    self.skip_non_blank();
+                    self.lookahead(2);
+                }
             }
 
             // We may reach the end of a plain scalar if:
@@ -2173,10 +2175,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         // empty. Skip to the end of the line.
                         self.skip_ws_to_eol(SkipTabs::Yes)?;
                         if !is_breakz(self.ch()) {
-                        return Err(ScanError::new(
-                            start_mark,
-                            "while scanning a plain scalar, found a tab",
-                        ));
+                            return Err(ScanError::new(
+                                start_mark,
+                                "while scanning a plain scalar, found a tab",
+                            ));
                         }
                     } else {
                         self.skip_blank();
