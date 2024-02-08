@@ -2,7 +2,7 @@ use std::fs::{self, DirEntry};
 
 use libtest_mimic::{run_tests, Arguments, Outcome, Test};
 
-use yaml_rust::{
+use yaml_rust2::{
     parser::{Event, EventReceiver, Parser, Tag},
     scanner::TScalarStyle,
     yaml, ScanError, Yaml, YamlLoader,

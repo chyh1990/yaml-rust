@@ -1,6 +1,6 @@
 #![allow(clippy::enum_glob_use)]
 
-use yaml_rust::{scanner::TokenType::*, scanner::*};
+use yaml_rust2::{scanner::TokenType::*, scanner::*};
 
 macro_rules! next {
     ($p:ident, $tk:pat) => {{

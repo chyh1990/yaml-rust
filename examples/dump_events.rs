@@ -1,9 +1,7 @@
-extern crate yaml_rust;
-
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use yaml_rust::{
+use yaml_rust2::{
     parser::{MarkedEventReceiver, Parser},
     scanner::Marker,
     Event,

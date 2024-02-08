@@ -1,23 +1,24 @@
-// Copyright 2015, Yuheng Chen. See the LICENSE file at the top-level
-// directory of this distribution.
+// Copyright 2015, Yuheng Chen.
+// Copyright 2023, Ethiraric.
+// See the LICENSE file at the top-level directory of this distribution.
 
 //! YAML 1.2 implementation in pure Rust.
 //!
 //! # Usage
 //!
-//! This crate is [on github](https://github.com/chyh1990/yaml-rust) and can be
-//! used by adding `yaml-rust` to the dependencies in your project's `Cargo.toml`.
+//! This crate is [on github](https://github.com/Ethiraric/yaml-rust2) and can be used by adding
+//! `yaml-rust2` to the dependencies in your project's `Cargo.toml`.
 //!
 //! ```toml
 //! [dependencies]
-//! yaml-rust = "0.4"
+//! yaml-rust2 = "0.5.0"
 //! ```
 //!
 //! # Examples
 //! Parse a string into `Vec<Yaml>` and then serialize it as a YAML string.
 //!
 //! ```
-//! use yaml_rust::{YamlLoader, YamlEmitter};
+//! use yaml_rust2::{YamlLoader, YamlEmitter};
 //!
 //! let docs = YamlLoader::load_from_str("[1, 2, 3]").unwrap();
 //! let doc = &docs[0]; // select the first YAML document
@@ -29,7 +30,7 @@
 //!
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/yaml-rust/0.4.5")]
+#![doc(html_root_url = "https://docs.rs/yaml-rust2/0.5.0")]
 #![cfg_attr(feature = "cargo-clippy", warn(clippy::pedantic))]
 #![cfg_attr(
     feature = "cargo-clippy",

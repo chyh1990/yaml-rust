@@ -1,11 +1,11 @@
 #![allow(clippy::module_name_repetitions)]
 
+use std::{collections::BTreeMap, convert::TryFrom, mem, ops::Index};
+
+use linked_hash_map::LinkedHashMap;
+
 use crate::parser::{Event, MarkedEventReceiver, Parser, Tag};
 use crate::scanner::{Marker, ScanError, TScalarStyle};
-use linked_hash_map::LinkedHashMap;
-use std::collections::BTreeMap;
-use std::mem;
-use std::ops::Index;
 
 /// A YAML node is stored as this `Yaml` enumeration, which provides an easy way to
 /// access your YAML document.
@@ -13,7 +13,7 @@ use std::ops::Index;
 /// # Examples
 ///
 /// ```
-/// use yaml_rust::Yaml;
+/// use yaml_rust2::Yaml;
 /// let foo = Yaml::from_str("-123"); // convert the string to the appropriate YAML type
 /// assert_eq!(foo.as_i64().unwrap(), -123);
 ///
@@ -317,7 +317,7 @@ impl Yaml {
     ///
     /// # Examples
     /// ```
-    /// # use yaml_rust::yaml::Yaml;
+    /// # use yaml_rust2::yaml::Yaml;
     /// assert!(matches!(Yaml::from_str("42"), Yaml::Integer(42)));
     /// assert!(matches!(Yaml::from_str("0x2A"), Yaml::Integer(42)));
     /// assert!(matches!(Yaml::from_str("0o52"), Yaml::Integer(42)));
@@ -379,7 +379,7 @@ impl Index<usize> for Yaml {
         if let Some(v) = self.as_vec() {
             v.get(idx).unwrap_or(&BAD_VALUE)
         } else if let Some(v) = self.as_hash() {
-            let key = Yaml::Integer(idx as i64);
+            let key = Yaml::Integer(i64::try_from(idx).unwrap());
             v.get(&key).unwrap_or(&BAD_VALUE)
         } else {
             &BAD_VALUE

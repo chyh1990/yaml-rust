@@ -153,7 +153,7 @@ pub struct Parser<T> {
 ///
 /// # Example
 /// ```
-/// # use yaml_rust::parser::{Event, EventReceiver, Parser};
+/// # use yaml_rust2::parser::{Event, EventReceiver, Parser};
 /// #
 /// /// Sink of events. Collects them into an array.
 /// struct EventSink {
@@ -508,7 +508,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
                     //    return Err(ScanError::new(tok.0,
                     //        "found incompatible YAML document"));
                     //}
-                    if version_directive_received == true {
+                    if version_directive_received {
                         return Err(ScanError::new(*mark, "duplicate version directive"));
                     }
                     version_directive_received = true;

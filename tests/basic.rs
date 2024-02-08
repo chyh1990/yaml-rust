@@ -2,7 +2,7 @@
 #![allow(clippy::float_cmp)]
 
 use std::vec;
-use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
+use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 
 #[test]
 fn test_api() {

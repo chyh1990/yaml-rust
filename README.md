@@ -1,16 +1,13 @@
-# yaml-rust
+# yaml-rust2
 
-The missing YAML 1.2 implementation for Rust.
+A fully compliant YAML 1.2 implementation written in pure Rust.
+This work is based on [`yaml-rust`](https://github.com/chyh1990/yaml-rust) with
+fixes towards being compliant to the [YAML test
+suite](https://github.com/yaml/yaml-test-suite/). `yaml-rust`'s parser is
+heavily influenced by `libyaml` and `yaml-cpp`.
 
-[![Travis](https://travis-ci.org/chyh1990/yaml-rust.svg?branch=master)](https://travis-ci.org/chyh1990/yaml-rust)
-[![AppVeyor](https://ci.appveyor.com/api/projects/status/scf47535ckp4ylg4?svg=true)](https://ci.appveyor.com/project/chyh1990/yaml-rust)
-[![crates.io](https://img.shields.io/crates/v/yaml-rust.svg)](https://crates.io/crates/yaml-rust)
-[![docs.rs](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/yaml-rust)
-
-`yaml-rust` is a pure Rust YAML 1.2 implementation,
-which enjoys the memory safety
-property and other benefits from the Rust language.
-The parser is heavily influenced by `libyaml` and `yaml-cpp`.
+`yaml-rust2` is a pure Rust YAML 1.2 implementation, which enjoys the memory
+safety property and other benefits from the Rust language.
 
 ## Quick Start
 
@@ -18,21 +15,13 @@ Add the following to the Cargo.toml of your project:
 
 ```toml
 [dependencies]
-yaml-rust = "0.4"
+yaml-rust2 = "0.5"
 ```
 
-and import:
+Use `yaml_rust2::YamlLoader` to load YAML documents and access them as `Yaml` objects:
 
 ```rust
-extern crate yaml_rust;
-```
-
-Use `yaml::YamlLoader` to load the YAML documents and access it
-as Vec/HashMap:
-
-```rust
-extern crate yaml_rust;
-use yaml_rust::{YamlLoader, YamlEmitter};
+use yaml_rust2::{YamlLoader, YamlEmitter};
 
 fn main() {
     let s =
@@ -56,8 +45,8 @@ bar:
     assert_eq!(doc["foo"][0].as_str().unwrap(), "list1");
     assert_eq!(doc["bar"][1].as_f64().unwrap(), 2.0);
 
-    // Chained key/array access is checked and won't panic,
-    // return BadValue if they are not exist.
+    // Array/map-like accesses are checked and won't panic.
+    // They will return `BadValue` if the access is invalid.
     assert!(doc["INVALID_KEY"][100].is_badvalue());
 
     // Dump the YAML object
@@ -70,56 +59,48 @@ bar:
 }
 ```
 
-Note that `yaml_rust::Yaml` implements `Index<&'a str>` & `Index<usize>`:
+Note that `yaml_rust2::Yaml` implements `Index<&'a str>` and `Index<usize>`:
 
-* `Index<usize>` assumes the container is an Array
-* `Index<&'a str>` assumes the container is a string to value Map
+* `Index<usize>` assumes the container is an array
+* `Index<&'a str>` assumes the container is a string to value map
 * otherwise, `Yaml::BadValue` is returned
 
-If your document does not conform to this convention (e.g. map with
-complex type key), you can use the `Yaml::as_XXX` family API to access your
-documents.
+If your document does not conform to this convention (e.g. map with complex
+type key), you can use the `Yaml::as_XXX` family API of functions to access
+your objects.
 
 ## Features
 
 * Pure Rust
-* Ruby-like Array/Hash access API
+* `Vec`/`HashMap` access API
 * Low-level YAML events emission
 
 ## Specification Compliance
 
-This implementation aims to provide YAML parser fully compatible with
-the YAML 1.2 specification. The parser can correctly parse almost all
-examples in the specification, except for the following known bugs:
-
-* Empty plain scalar in certain contexts
-
-However, the widely used library `libyaml` also fails to parse these examples,
-so it may not be a huge problem for most users.
-
-## Goals
-
-* Encoder
-* Tag directive
-* Alias while deserialization
-
-## Minimum Rust version policy
-
-This crate's minimum supported `rustc` version is 1.31 (released with Rust 2018, after v0.4.3), as this is the currently known minimum version for [`regex`](https://crates.io/crates/regex#minimum-rust-version-policy) as well.
+This implementation is fully compatible with the YAML 1.2 specification. In
+order to help with compliance, `yaml-rust2` tests against (and passes) the [YAML
+test suite](https://github.com/yaml/yaml-test-suite/).
 
 ## License
 
 Licensed under either of
 
- * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+ * Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license (http://opensource.org/licenses/MIT)
 
 at your option.
+
+Since this repository was originally maintained by
+[chyh1990](https://github.com/chyh1990), there are 2 sets of licenses.
+A license of each set must be included in redistributions. See the
+[LICENSE](LICENSE) file for more details.
+
+You can find licences in the [`.licenses`](.licenses) subfolder.
 
 ## Contribution
 
 Fork & PR on Github.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any
-additional terms or conditions.
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall
+be dual licensed as above, without any additional terms or conditions.
