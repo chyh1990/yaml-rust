@@ -43,7 +43,7 @@ impl Generator {
         self.gen_array(writer, items_lo, items_hi, Generator::gen_record_object)
     }
 
-    /// Generate an array of strings.
+    /// Generate an array of lipsum one-liners.
     fn gen_strings_array<W: std::fmt::Write>(
         &mut self,
         writer: &mut W,
@@ -128,6 +128,7 @@ impl Generator {
         self.gen_array(writer, items_lo, items_hi, Generator::gen_author_object)
     }
 
+    /// Generate a small object with 2 string fields.
     fn gen_author_object<W: std::fmt::Write>(&mut self, writer: &mut W) -> std::fmt::Result {
         let mut fields = HashMap::<String, Box<GenFn<W>>>::new();
         fields.insert(
