@@ -414,7 +414,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// clone of) the same error.
     #[inline]
     pub fn get_error(&self) -> Option<ScanError> {
-        self.error.as_ref().map(std::clone::Clone::clone)
+        self.error.clone()
     }
 
     /// Fill `self.buffer` with at least `count` characters.
@@ -746,7 +746,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// # Errors
     /// This function returns an error if one of the key we would stale was required to be a key.
     fn stale_simple_keys(&mut self) -> ScanResult {
-        for (_, sk) in self.simple_keys.iter_mut().enumerate() {
+        for sk in &mut self.simple_keys {
             if sk.possible
                 // If not in a flow construct, simple keys cannot span multiple lines.
                 && self.flow_level == 0

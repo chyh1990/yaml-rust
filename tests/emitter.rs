@@ -36,7 +36,7 @@ a4:
 
 #[test]
 fn test_emit_complex() {
-    let s = r#"
+    let s = r"
 cataloge:
   product: &coffee   { name: Coffee,    price: 2.5  ,  unit: 1l  }
   product: &cookies  { name: Cookies!,  price: 3.40 ,  unit: 400g}
@@ -54,7 +54,7 @@ products:
     bool key
   {}:
     empty hash key
-            "#;
+            ";
     let docs = YamlLoader::load_from_str(s).unwrap();
     let doc = &docs[0];
     let mut writer = String::new();
@@ -66,8 +66,8 @@ products:
         Ok(y) => y,
         Err(e) => panic!("{}", e),
     };
-    let doc_new = &docs_new[0];
-    assert_eq!(doc, doc_new);
+    let new_doc = &docs_new[0];
+    assert_eq!(doc, new_doc);
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn test_empty_and_nested_compact() {
 
 fn test_empty_and_nested_flag(compact: bool) {
     let s = if compact {
-        r#"---
+        r"---
 a:
   b:
     c: hello
@@ -198,9 +198,9 @@ a:
 e:
   - f
   - g
-  - h: []"#
+  - h: []"
     } else {
-        r#"---
+        r"---
 a:
   b:
     c: hello
@@ -209,7 +209,7 @@ e:
   - f
   - g
   -
-    h: []"#
+    h: []"
     };
 
     let docs = YamlLoader::load_from_str(s).unwrap();
@@ -226,13 +226,13 @@ e:
 
 #[test]
 fn test_nested_arrays() {
-    let s = r#"---
+    let s = r"---
 a:
   - b
   - - c
     - d
     - - e
-      - f"#;
+      - f";
 
     let docs = YamlLoader::load_from_str(s).unwrap();
     let doc = &docs[0];
@@ -249,14 +249,14 @@ a:
 
 #[test]
 fn test_deeply_nested_arrays() {
-    let s = r#"---
+    let s = r"---
 a:
   - b
   - - c
     - d
     - - e
       - - f
-      - - e"#;
+      - - e";
 
     let docs = YamlLoader::load_from_str(s).unwrap();
     let doc = &docs[0];
@@ -273,12 +273,12 @@ a:
 
 #[test]
 fn test_nested_hashes() {
-    let s = r#"---
+    let s = r"---
 a:
   b:
     c:
       d:
-        e: f"#;
+        e: f";
 
     let docs = YamlLoader::load_from_str(s).unwrap();
     let doc = &docs[0];

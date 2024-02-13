@@ -352,11 +352,11 @@ fn test_integer_key() {
 #[test]
 fn test_indentation_equality() {
     let four_spaces = YamlLoader::load_from_str(
-        r#"
+        r"
 hash:
     with:
         indentations
-"#,
+",
     )
     .unwrap()
     .into_iter()
@@ -364,11 +364,11 @@ hash:
     .unwrap();
 
     let two_spaces = YamlLoader::load_from_str(
-        r#"
+        r"
 hash:
   with:
     indentations
-"#,
+",
     )
     .unwrap()
     .into_iter()
@@ -376,11 +376,11 @@ hash:
     .unwrap();
 
     let one_space = YamlLoader::load_from_str(
-        r#"
+        r"
 hash:
  with:
   indentations
-"#,
+",
     )
     .unwrap()
     .into_iter()
@@ -388,11 +388,11 @@ hash:
     .unwrap();
 
     let mixed_spaces = YamlLoader::load_from_str(
-        r#"
+        r"
 hash:
      with:
                indentations
-"#,
+",
     )
     .unwrap()
     .into_iter()
@@ -408,7 +408,7 @@ hash:
 fn test_two_space_indentations() {
     // https://github.com/kbknapp/clap-rs/issues/965
 
-    let s = r#"
+    let s = r"
 subcommands:
   - server:
     about: server related commands
@@ -418,7 +418,7 @@ subcommands2:
 subcommands3:
  - server:
     about: server related commands
-            "#;
+            ";
 
     let out = YamlLoader::load_from_str(s).unwrap();
     let doc = &out.into_iter().next().unwrap();
