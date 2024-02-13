@@ -3,6 +3,8 @@
 
 use std::{char, collections::VecDeque, error::Error, fmt};
 
+use arraydeque::ArrayDeque;
+
 use crate::char_traits::{
     as_hex, is_alpha, is_anchor_char, is_blank, is_blank_or_breakz, is_break, is_breakz, is_digit,
     is_flow, is_hex, is_tag_char, is_uri_char, is_z,
@@ -287,6 +289,17 @@ struct Indent {
     needs_block_end: bool,
 }
 
+/// The size of the [`Scanner`] buffer.
+///
+/// The buffer is statically allocated to avoid conditions for reallocations each time we
+/// consume/push a character. As of now, almost all lookaheads are 4 characters maximum, except:
+///   - Escape sequences parsing: some escape codes are 8 characters
+///   - Scanning indent in scalars: this looks ahead `indent + 2` characters
+/// This constant must be set to at least 8. When scanning indent in scalars, the lookahead is done
+/// in a single call if and only if the indent is `BUFFER_LEN - 2` or less. If the indent is higher
+/// than that, the code will fall back to a loop of lookaheads.
+const BUFFER_LEN: usize = 16;
+
 /// The YAML scanner.
 ///
 /// This corresponds to the low-level interface when reading YAML. The scanner emits token as they
@@ -311,7 +324,7 @@ pub struct Scanner<T> {
     /// [`Self::next`] until we have more context.
     tokens: VecDeque<Token>,
     /// Buffer for the next characters to consume.
-    buffer: VecDeque<char>,
+    buffer: ArrayDeque<char, BUFFER_LEN>,
     /// The last error that happened.
     error: Option<ScanError>,
 
@@ -387,7 +400,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     pub fn new(rdr: T) -> Scanner<T> {
         Scanner {
             rdr,
-            buffer: VecDeque::new(),
+            buffer: ArrayDeque::new(),
             mark: Marker::new(0, 1, 0),
             tokens: VecDeque::new(),
             error: None,
@@ -426,7 +439,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             return;
         }
         for _ in 0..(count - self.buffer.len()) {
-            self.buffer.push_back(self.rdr.next().unwrap_or('\0'));
+            self.buffer
+                .push_back(self.rdr.next().unwrap_or('\0'))
+                .unwrap();
         }
     }
 
@@ -1722,7 +1737,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             // Our last character read is stored in `c`. It is either an EOF or a break. In any
             // case, we need to push it back into `self.buffer` so it may be properly read
             // after. We must not insert it in `string`.
-            self.buffer.push_back(c);
+            self.buffer.push_back(c).unwrap();
 
             // We need to manually update our position; we haven't called a `skip` function.
             self.mark.col += line_buffer.len();
@@ -1739,10 +1754,23 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     /// Skip the block scalar indentation and empty lines.
     fn skip_block_scalar_indent(&mut self, indent: usize, breaks: &mut String) {
         loop {
-            self.lookahead(indent + 2);
             // Consume all spaces. Tabs cannot be used as indentation.
-            while self.mark.col < indent && self.ch() == ' ' {
-                self.skip_blank();
+            if indent < BUFFER_LEN - 2 {
+                self.lookahead(BUFFER_LEN);
+                while self.mark.col < indent && self.ch() == ' ' {
+                    self.skip_blank();
+                }
+            } else {
+                loop {
+                    self.lookahead(BUFFER_LEN);
+                    while !self.buffer.is_empty() && self.mark.col < indent && self.ch() == ' ' {
+                        self.skip_blank();
+                    }
+                    if !(!self.buffer.is_empty() && self.mark.col < indent && self.ch() == ' ') {
+                        break;
+                    }
+                }
+                self.lookahead(2);
             }
 
             // If our current line is empty, skip over the break and continue looping.

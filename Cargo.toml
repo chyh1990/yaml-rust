@@ -13,6 +13,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+arraydeque = "0.5.1"
 linked-hash-map = "0.5.3"
 
 [dev-dependencies]
