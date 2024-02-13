@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod gen;
+mod nested;
 
 use std::collections::HashMap;
 
@@ -8,8 +9,9 @@ use rand::{rngs::ThreadRng, Rng};
 
 fn main() -> std::fmt::Result {
     let mut s = String::new();
-    let mut g = Generator::new();
-    g.gen_strings_array(&mut s, 1_300_000, 1_300_001, 10, 40)?;
+    // let mut g = Generator::new();
+    // g.gen_strings_array(&mut s, 1_300_000, 1_300_001, 10, 40)?;
+    nested::create_deep_object(&mut s, 5_000_000)?;
     println!("{s}");
     Ok(())
 }
