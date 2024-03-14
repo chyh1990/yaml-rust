@@ -3,7 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use rand::{rngs::ThreadRng, Rng};
 
 /// Create a deep object with the given amount of nodes.
-pub fn create_deep_object<W: std::fmt::Write>(writer: &mut W, n_nodes: usize) -> std::fmt::Result {
+pub fn create_deep_object<W: std::io::Write>(
+    writer: &mut W,
+    n_nodes: usize,
+) -> std::io::Result<()> {
     let mut tree = Tree::new();
     for _ in 0..n_nodes {
         tree.push_node();
@@ -51,7 +54,7 @@ impl Tree {
     }
 
     /// Write the YAML representation of the tree to `writer`.
-    fn write_to<W: std::fmt::Write>(&self, writer: &mut W) -> std::fmt::Result {
+    fn write_to<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         (*self.root).borrow().write_to(writer, 0)
     }
 }
@@ -72,15 +75,15 @@ impl Node {
     }
 
     /// Write the YAML representation of the node to `writer`.
-    fn write_to<W: std::fmt::Write>(&self, writer: &mut W, indent: usize) -> std::fmt::Result {
+    fn write_to<W: std::io::Write>(&self, writer: &mut W, indent: usize) -> std::io::Result<()> {
         if self.children.is_empty() {
             write_n(writer, ' ', indent)?;
-            writer.write_str("a: 1\n")?;
+            writer.write_all(b"a: 1\n")?;
         } else {
             for (n, child) in self.children.iter().enumerate() {
                 write_n(writer, ' ', indent)?;
                 write_id_for_number(writer, n)?;
-                writer.write_str(":\n")?;
+                writer.write_all(b":\n")?;
                 (**child).borrow().write_to(writer, indent + 2)?;
             }
         }
@@ -89,19 +92,19 @@ impl Node {
 }
 
 /// Write `n` times `c` to `out`.
-fn write_n<W: std::fmt::Write>(out: &mut W, c: char, n: usize) -> std::fmt::Result {
+fn write_n<W: std::io::Write>(out: &mut W, c: char, n: usize) -> std::io::Result<()> {
     for _ in 0..n {
-        out.write_char(c)?;
+        write!(out, "{c}")?;
     }
     Ok(())
 }
 
 /// Create a valid identifier for the given number.
-fn write_id_for_number<W: std::fmt::Write>(out: &mut W, mut n: usize) -> std::fmt::Result {
+fn write_id_for_number<W: std::io::Write>(out: &mut W, mut n: usize) -> std::io::Result<()> {
     const DIGITS: &[u8] = b"_abcdefghijklmnopqrstuvwxyz";
     n += 1;
     while n > 0 {
-        out.write_char(DIGITS[n % DIGITS.len()] as char)?;
+        write!(out, "{}", DIGITS[n % DIGITS.len()] as char)?;
         n /= DIGITS.len();
     }
     Ok(())

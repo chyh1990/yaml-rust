@@ -19,8 +19,6 @@ linked-hash-map = "0.5.3"
 [dev-dependencies]
 libtest-mimic = "0.3.0"
 quickcheck = "0.9"
-rand = "0.8.5"
-lipsum = "0.9.0"
 
 [profile.release-lto]
 inherits = "release"
@@ -29,3 +27,11 @@ lto = true
 [[test]]
 name = "yaml-test-suite"
 harness = false
+
+[[bin]]
+name = "dump_events"
+path = "tools/dump_events.rs"
+
+[[bin]]
+name = "time_parse"
+path = "tools/time_parse.rs"
