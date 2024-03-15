@@ -15,7 +15,7 @@ Add the following to the Cargo.toml of your project:
 
 ```toml
 [dependencies]
-yaml-rust2 = "0.5"
+yaml-rust2 = "0.6"
 ```
 
 Use `yaml_rust2::YamlLoader` to load YAML documents and access them as `Yaml` objects:
