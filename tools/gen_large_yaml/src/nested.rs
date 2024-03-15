@@ -48,7 +48,8 @@ impl Tree {
     fn push_node(&mut self) {
         let new_node = Node::new_rc_refcell();
         let n_nodes = self.nodes.len();
-        let parent = &mut self.nodes[self.rng.gen_range(0..n_nodes)];
+        // Bias the nodes towards the end so that there is more nesting.
+        let parent = &mut self.nodes[self.rng.gen_range((3 * n_nodes / 4)..n_nodes)];
         (**parent).borrow_mut().push_child(new_node.clone());
         self.nodes.push(new_node);
     }

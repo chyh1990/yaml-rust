@@ -26,7 +26,7 @@ fn main() -> std::io::Result<()> {
 
     println!("Generating nested.yaml");
     let mut out = BufWriter::new(File::create(output_path.join("nested.yaml")).unwrap());
-    nested::create_deep_object(&mut out, 5_000_000)?;
+    nested::create_deep_object(&mut out, 1_100_000)?;
 
     println!("Generating small_objects.yaml");
     let mut out = BufWriter::new(File::create(output_path.join("small_objects.yaml")).unwrap());
