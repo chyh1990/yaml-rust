@@ -27,5 +27,10 @@ fn main() {
     let begin = std::time::Instant::now();
     parser.load(&mut sink, true).unwrap();
     let end = std::time::Instant::now();
-    println!("Loaded {}MiB in {:?}", s.len() / 1024 / 1024, end - begin);
+
+    if args.len() == 3 && args[2] == "--short" {
+        println!("{}", (end - begin).as_nanos());
+    } else {
+        println!("Loaded {}MiB in {:?}", s.len() / 1024 / 1024, end - begin);
+    }
 }
