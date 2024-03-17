@@ -208,6 +208,8 @@ impl YamlLoader {
     /// The `source` is interpreted as YAML documents and is parsed. Parsing succeeds if and only
     /// if all documents are parsed successfully. An error in a latter document prevents the former
     /// from being returned.
+    /// # Errors
+    /// Returns `ScanError` when loading fails.
     pub fn load_from_str(source: &str) -> Result<Vec<Yaml>, ScanError> {
         Self::load_from_iter(source.chars())
     }
@@ -217,6 +219,8 @@ impl YamlLoader {
     /// The `source` is interpreted as YAML documents and is parsed. Parsing succeeds if and only
     /// if all documents are parsed successfully. An error in a latter document prevents the former
     /// from being returned.
+    /// # Errors
+    /// Returns `ScanError` when loading fails.
     pub fn load_from_iter<I: Iterator<Item = char>>(source: I) -> Result<Vec<Yaml>, ScanError> {
         let mut loader = YamlLoader::default();
         let mut parser = Parser::new(source);
@@ -259,6 +263,8 @@ impl<T: std::io::Read> YamlDecoder<T> {
         self
     }
 
+    /// # Errors
+    /// Returns `LoadError` when decoding fails.
     pub fn decode(&mut self) -> Result<Vec<Yaml>, LoadError> {
         let mut buffer = Vec::new();
         self.source.read_to_end(&mut buffer)?;

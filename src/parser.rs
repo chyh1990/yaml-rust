@@ -218,6 +218,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
     ///
     /// Any subsequent call to [`Parser::peek`] will return the same value, until a call to
     /// [`Parser::next`] or [`Parser::load`].
+    /// # Errors
+    /// Returns `ScanError` when loading the next event fails.
     pub fn peek(&mut self) -> Result<&(Event, Marker), ScanError> {
         if let Some(ref x) = self.current {
             Ok(x)
@@ -228,6 +230,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     /// Try to load the next event and return it, consuming it from `self`.
+    /// # Errors
+    /// Returns `ScanError` when loading the next event fails.
     pub fn next(&mut self) -> ParseResult {
         match self.current.take() {
             None => self.parse(),
@@ -299,6 +303,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
     ///
     /// Note that any [`EventReceiver`] is also a [`MarkedEventReceiver`], so implementing the
     /// former is enough to call this function.
+    /// # Errors
+    /// Returns `ScanError` when loading fails.
     pub fn load<R: MarkedEventReceiver>(
         &mut self,
         recv: &mut R,

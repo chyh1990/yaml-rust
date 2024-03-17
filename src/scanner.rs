@@ -604,6 +604,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.simple_key_allowed = false;
     }
 
+    /// Fetch the next token in the stream.
+    /// # Errors
+    /// Returns `ScanError` when the scanner does not find the next expected token.
     pub fn fetch_next_token(&mut self) -> ScanResult {
         self.lookahead(1);
         // eprintln!("--> fetch_next_token Cur {:?} {:?}", self.mark, self.ch());
@@ -708,6 +711,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         }
     }
 
+    /// Return the next token in the stream.
+    /// # Errors
+    /// Returns `ScanError` when scanning fails to find an expected next token.
     pub fn next_token(&mut self) -> Result<Option<Token>, ScanError> {
         if self.stream_end_produced {
             return Ok(None);
@@ -731,6 +737,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         Ok(Some(t))
     }
 
+    /// Fetch tokens from the token stream.
+    /// # Errors
+    /// Returns `ScanError` when loading fails.
     pub fn fetch_more_tokens(&mut self) -> ScanResult {
         let mut need_more;
         loop {

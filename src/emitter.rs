@@ -168,6 +168,9 @@ impl<'a> YamlEmitter<'a> {
         self.multiline_strings
     }
 
+    /// Dump Yaml to an output stream.
+    /// # Errors
+    /// Returns `EmitError` when an error occurs.
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
         // write DocumentStart
         writeln!(self.writer, "---")?;
