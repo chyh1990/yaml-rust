@@ -20,7 +20,7 @@ hashlink = "0.8"
 
 [dev-dependencies]
 libtest-mimic = "0.3.0"
-quickcheck = "0.9"
+quickcheck = "1.0"
 
 [profile.release-lto]
 inherits = "release"
