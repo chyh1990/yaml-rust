@@ -716,7 +716,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         if !self.token_available {
             self.fetch_more_tokens()?;
         }
-        let t = self.tokens.pop_front().unwrap();
+        let Some(t) = self.tokens.pop_front() else {
+            return Err(ScanError::new(
+                self.mark,
+                "did not find expected next token",
+            ));
+        };
         self.token_available = false;
         self.tokens_parsed += 1;
 

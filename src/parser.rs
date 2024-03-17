@@ -306,7 +306,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
     ) -> Result<(), ScanError> {
         if !self.scanner.stream_started() {
             let (ev, mark) = self.next()?;
-            assert_eq!(ev, Event::StreamStart);
+            if ev != Event::StreamStart {
+                return Err(ScanError::new(mark, "did not find expected <stream-start>"));
+            }
             recv.on_event(ev, mark);
         }
 
@@ -337,7 +339,12 @@ impl<T: Iterator<Item = char>> Parser<T> {
         mark: Marker,
         recv: &mut R,
     ) -> Result<(), ScanError> {
-        assert_eq!(first_ev, Event::DocumentStart);
+        if first_ev != Event::DocumentStart {
+            return Err(ScanError::new(
+                mark,
+                "did not find expected <document-start>",
+            ));
+        }
         recv.on_event(first_ev, mark);
 
         let (ev, mark) = self.next()?;

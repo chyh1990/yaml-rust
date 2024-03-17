@@ -16,6 +16,8 @@
 - `Yaml::load_from_bytes()` is now available.
   ([#156](https://github.com/chyh1990/yaml-rust/pull/156))
 
+- The parser and scanner now return Err() instead of calling panic.
+
 **Development**:
 
 - The documentation was updated to include a security note mentioning that
