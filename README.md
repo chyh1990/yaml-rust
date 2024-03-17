@@ -6,8 +6,8 @@ fixes towards being compliant to the [YAML test
 suite](https://github.com/yaml/yaml-test-suite/). `yaml-rust`'s parser is
 heavily influenced by `libyaml` and `yaml-cpp`.
 
-`yaml-rust2` is a pure Rust YAML 1.2 implementation, which enjoys the memory
-safety property and other benefits from the Rust language.
+`yaml-rust2` is a pure Rust YAML 1.2 implementation that benefits from the
+memory safety and other benefits from the Rust language.
 
 ## Quick Start
 
