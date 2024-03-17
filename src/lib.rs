@@ -30,12 +30,10 @@
 //!
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/yaml-rust2/0.5.0")]
 #![cfg_attr(feature = "cargo-clippy", warn(clippy::pedantic))]
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(
-        clippy::match_same_arms,
         clippy::should_implement_trait,
         clippy::missing_errors_doc,
         clippy::missing_panics_doc,

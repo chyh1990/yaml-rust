@@ -81,7 +81,7 @@ impl MarkedEventReceiver for YamlLoader {
     fn on_event(&mut self, ev: Event, _: Marker) {
         // println!("EV {:?}", ev);
         match ev {
-            Event::DocumentStart => {
+            Event::DocumentStart | Event::Nothing | Event::StreamStart | Event::StreamEnd => {
                 // do nothing
             }
             Event::DocumentEnd => {
@@ -156,7 +156,6 @@ impl MarkedEventReceiver for YamlLoader {
                 };
                 self.insert_new_node((n, 0));
             }
-            _ => { /* ignore */ }
         }
         // println!("DOC {:?}", self.doc_stack);
     }

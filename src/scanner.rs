@@ -786,7 +786,6 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         loop {
             // TODO(chenyh) BOM
             match self.look_ch() {
-                ' ' => self.skip_blank(),
                 // Tabs may not be used as indentation.
                 // "Indentation" only exists as long as a block is started, but does not exist
                 // inside of flow-style constructs. Tabs are allowed as part of leading
@@ -806,7 +805,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         ));
                     }
                 }
-                '\t' => self.skip_blank(),
+                '\t' | ' ' => self.skip_blank(),
                 '\n' | '\r' => {
                     self.lookahead(2);
                     self.skip_line();
