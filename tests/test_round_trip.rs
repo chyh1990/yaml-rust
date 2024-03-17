@@ -68,3 +68,15 @@ fn test_issue133() {
     let doc2 = YamlLoader::load_from_str(&out_str).unwrap().pop().unwrap();
     assert_eq!(doc, doc2); // This failed because the type has changed to a number now
 }
+
+#[test]
+fn test_newline() {
+    let y = Yaml::Array(vec![Yaml::String("\n".to_owned())]);
+    roundtrip(&y);
+}
+
+#[test]
+fn test_crlf() {
+    let y = Yaml::Array(vec![Yaml::String("\r\n".to_owned())]);
+    roundtrip(&y);
+}
