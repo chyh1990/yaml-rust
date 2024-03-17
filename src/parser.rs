@@ -617,9 +617,8 @@ impl<T: Iterator<Item = char>> Parser<T> {
                         }
                         Some(id) => return Ok((Event::Alias(*id), mark)),
                     }
-                } else {
-                    unreachable!()
                 }
+                unreachable!()
             }
             Token(_, TokenType::Anchor(_)) => {
                 if let Token(mark, TokenType::Anchor(name)) = self.fetch_token() {
@@ -782,10 +781,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
                             {
                                 self.state = State::FlowMappingValue;
                                 return Ok((Event::empty_scalar(), mark));
-                            } else {
-                                self.push_state(State::FlowMappingValue);
-                                return self.parse_node(false, false);
                             }
+                            self.push_state(State::FlowMappingValue);
+                            return self.parse_node(false, false);
                         }
                         Token(marker, TokenType::Value) => {
                             self.state = State::FlowMappingValue;
@@ -814,21 +812,20 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 let Token(mark, _) = *self.peek_token()?;
                 self.state = State::FlowMappingKey;
                 return Ok((Event::empty_scalar(), mark));
-            } else {
-                match *self.peek_token()? {
-                    Token(marker, TokenType::Value) => {
-                        self.skip();
-                        match self.peek_token()?.1 {
-                            TokenType::FlowEntry | TokenType::FlowMappingEnd => {}
-                            _ => {
-                                self.push_state(State::FlowMappingKey);
-                                return self.parse_node(false, false);
-                            }
+            }
+            match *self.peek_token()? {
+                Token(marker, TokenType::Value) => {
+                    self.skip();
+                    match self.peek_token()?.1 {
+                        TokenType::FlowEntry | TokenType::FlowMappingEnd => {}
+                        _ => {
+                            self.push_state(State::FlowMappingKey);
+                            return self.parse_node(false, false);
                         }
-                        marker
                     }
-                    Token(marker, _) => marker,
+                    marker
                 }
+                Token(marker, _) => marker,
             }
         };
 

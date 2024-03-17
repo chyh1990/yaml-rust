@@ -2435,10 +2435,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         while let Some(indent) = self.indents.last() {
             if indent.needs_block_end {
                 break;
-            } else {
-                self.indent = indent.indent;
-                self.indents.pop();
             }
+            self.indent = indent.indent;
+            self.indents.pop();
         }
     }
 
