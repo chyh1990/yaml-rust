@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 description = "A fully YAML 1.2 compliant YAML parser"
 repository = "https://github.com/Ethiraric/yaml-rust2"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 arraydeque = "0.5.1"
