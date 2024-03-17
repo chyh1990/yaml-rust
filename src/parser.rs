@@ -224,7 +224,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         if let Some(ref x) = self.current {
             Ok(x)
         } else {
-            self.current = Some(self.next()?);
+            self.current = Some(self.next_token()?);
             self.peek()
         }
     }
@@ -232,7 +232,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
     /// Try to load the next event and return it, consuming it from `self`.
     /// # Errors
     /// Returns `ScanError` when loading the next event fails.
-    pub fn next(&mut self) -> ParseResult {
+    pub fn next_token(&mut self) -> ParseResult {
         match self.current.take() {
             None => self.parse(),
             Some(v) => Ok(v),
@@ -311,7 +311,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         multi: bool,
     ) -> Result<(), ScanError> {
         if !self.scanner.stream_started() {
-            let (ev, mark) = self.next()?;
+            let (ev, mark) = self.next_token()?;
             if ev != Event::StreamStart {
                 return Err(ScanError::new(mark, "did not find expected <stream-start>"));
             }
@@ -324,7 +324,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             return Ok(());
         }
         loop {
-            let (ev, mark) = self.next()?;
+            let (ev, mark) = self.next_token()?;
             if ev == Event::StreamEnd {
                 recv.on_event(ev, mark);
                 return Ok(());
@@ -353,11 +353,11 @@ impl<T: Iterator<Item = char>> Parser<T> {
         }
         recv.on_event(first_ev, mark);
 
-        let (ev, mark) = self.next()?;
+        let (ev, mark) = self.next_token()?;
         self.load_node(ev, mark, recv)?;
 
         // DOCUMENT-END is expected.
-        let (ev, mark) = self.next()?;
+        let (ev, mark) = self.next_token()?;
         assert_eq!(ev, Event::DocumentEnd);
         recv.on_event(ev, mark);
 
@@ -391,17 +391,17 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn load_mapping<R: MarkedEventReceiver>(&mut self, recv: &mut R) -> Result<(), ScanError> {
-        let (mut key_ev, mut key_mark) = self.next()?;
+        let (mut key_ev, mut key_mark) = self.next_token()?;
         while key_ev != Event::MappingEnd {
             // key
             self.load_node(key_ev, key_mark, recv)?;
 
             // value
-            let (ev, mark) = self.next()?;
+            let (ev, mark) = self.next_token()?;
             self.load_node(ev, mark, recv)?;
 
             // next event
-            let (ev, mark) = self.next()?;
+            let (ev, mark) = self.next_token()?;
             key_ev = ev;
             key_mark = mark;
         }
@@ -410,12 +410,12 @@ impl<T: Iterator<Item = char>> Parser<T> {
     }
 
     fn load_sequence<R: MarkedEventReceiver>(&mut self, recv: &mut R) -> Result<(), ScanError> {
-        let (mut ev, mut mark) = self.next()?;
+        let (mut ev, mut mark) = self.next_token()?;
         while ev != Event::SequenceEnd {
             self.load_node(ev, mark, recv)?;
 
             // next event
-            let (next_ev, next_mark) = self.next()?;
+            let (next_ev, next_mark) = self.next_token()?;
             ev = next_ev;
             mark = next_mark;
         }
@@ -1057,7 +1057,7 @@ a5: *x
         let mut p = Parser::new(s.chars());
         while {
             let event_peek = p.peek().unwrap().clone();
-            let event = p.next().unwrap();
+            let event = p.next_token().unwrap();
             assert_eq!(event, event_peek);
             event.0 != Event::StreamEnd
         } {}

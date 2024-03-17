@@ -30,9 +30,6 @@
 //!
 //! ```
 
-#![cfg_attr(feature = "cargo-clippy", warn(clippy::pedantic))]
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::should_implement_trait))]
-
 extern crate hashlink;
 
 pub(crate) mod char_traits;
