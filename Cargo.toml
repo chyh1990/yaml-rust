@@ -3,7 +3,8 @@ name = "yaml-rust2"
 version = "0.6.0"
 authors = [
   "Yuheng Chen <yuhengchen@sensetime.com>",
-  "Ethiraric <ethiraric@gmail.com>"
+  "Ethiraric <ethiraric@gmail.com>",
+  "David Aguilar <davvid@gmail.com>"
 ]
 documentation = "https://docs.rs/yaml-rust2"
 license = "MIT OR Apache-2.0"
