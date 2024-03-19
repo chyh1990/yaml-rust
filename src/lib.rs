@@ -30,6 +30,15 @@
 //!
 //! ```
 
+#![warn(clippy::pedantic)]
+#![allow(
+    clippy::match_same_arms,
+    clippy::should_implement_trait,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::redundant_else
+)]
+
 extern crate hashlink;
 
 pub(crate) mod char_traits;

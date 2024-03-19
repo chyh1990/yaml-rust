@@ -229,7 +229,7 @@ impl YamlLoader {
     }
 }
 
-/// YamlDecoder is a YamlLoader builder that allows you to supply your own encoding error trap.
+/// `YamlDecoder` is a `YamlLoader` builder that allows you to supply your own encoding error trap.
 /// For example, to read a YAML file while ignoring Unicode decoding errors you can set the
 /// `encoding_trap` to `encoding::DecoderTrap::Ignore`.
 /// ```rust
