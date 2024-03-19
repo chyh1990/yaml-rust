@@ -10,5 +10,6 @@ before_commit:
 ethi_bench:
   cargo build --release --all-targets
   cd ../Yaml-rust && cargo build --release --all-targets
+  cd ../serde-yaml/ && cargo build --release --all-targets
   cd ../libfyaml/build && ninja
   cargo bench_compare run_bench
