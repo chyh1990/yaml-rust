@@ -112,7 +112,7 @@ pub(crate) fn is_tag_char(c: char) -> bool {
 
 /// Check if the string can be expressed a valid literal block scalar.
 /// The YAML spec supports all of the following in block literals except `#xFEFF`:
-/// ```ignore
+/// ```no_compile
 ///     #x9 | #xA | [#x20-#x7E]                /* 8 bit */
 ///   | #x85 | [#xA0-#xD7FF] | [#xE000-#xFFFD] /* 16 bit */
 ///   | [#x10000-#x10FFFF]                     /* 32 bit */
