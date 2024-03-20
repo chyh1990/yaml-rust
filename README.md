@@ -87,6 +87,21 @@ This implementation is fully compatible with the YAML 1.2 specification. In
 order to help with compliance, `yaml-rust2` tests against (and passes) the [YAML
 test suite](https://github.com/yaml/yaml-test-suite/).
 
+## Upgrading from yaml-rust
+
+You can use `yaml-rust2` as a drop-in replacement for the original `yaml-rust` crate.
+
+```toml
+[dependencies]
+yaml-rust = { version = "#.#", package = "yaml-rust2" }
+```
+
+This `Cargo.toml` declaration allows you to refer to this crate as `yaml_rust` in your code.
+
+```rust
+use yaml_rust::{YamlLoader, YamlEmitter};
+```
+
 ## License
 
 Licensed under either of
