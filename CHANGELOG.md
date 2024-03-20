@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.0
+## v0.7.0
 
 **Features**:
 
@@ -29,6 +29,16 @@
 
 - `hashlink` is [now used](https://github.com/chyh1990/yaml-rust/pull/157)
   instead of `linked_hash_map`.
+
+## v0.6.0
+
+**Development**:
+
+- `is_xxx` functions were moved into the private `char_traits` module.
+
+- Benchmarking tools were added.
+
+- Performance was improved.
 
 ## v0.5.0
 
