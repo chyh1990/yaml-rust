@@ -3,12 +3,11 @@
 mod gen;
 mod nested;
 
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
-use rand::{rngs::ThreadRng, Rng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 /// The path into which the generated YAML files will be written.
 const OUTPUT_DIR: &str = "bench_yaml";
@@ -41,7 +40,10 @@ fn main() -> std::io::Result<()> {
 /// YAML Generator.
 struct Generator {
     /// The RNG state.
-    rng: ThreadRng,
+    ///
+    /// We don't need to be cryptographically secure. [`SmallRng`] also implements the
+    /// [`SeedableRng`] trait, allowing runs to be predictible.
+    rng: SmallRng,
     /// The stack of indentations.
     indents: Vec<usize>,
 }
@@ -52,7 +54,7 @@ impl Generator {
     /// Create a new generator.
     fn new() -> Self {
         Generator {
-            rng: rand::thread_rng(),
+            rng: SmallRng::seed_from_u64(42),
             indents: vec![0],
         }
     }
@@ -87,58 +89,61 @@ impl Generator {
     /// The `description` field is a long string and puts a lot of weight in plain scalar / block
     /// scalar parsing.
     fn gen_record_object<W: std::io::Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        let mut fields = HashMap::<String, Box<GenFn<W>>>::new();
-        fields.insert(
-            "description".to_string(),
-            Box::new(|gen, w| {
-                write!(w, "|")?;
-                gen.push_indent(2);
-                gen.nl(w)?;
-                let indent = gen.indent();
-                let text = gen::text(&mut gen.rng, 1, 9, 3, 8, 10, 20, 80 - indent);
-                gen.write_lines(w, &text)?;
-                gen.pop_indent();
-                Ok(())
-            }),
-        );
-
-        fields.insert(
-            "authors".to_string(),
-            Box::new(|gen, w| {
-                gen.push_indent(2);
-                gen.nl(w)?;
-                gen.gen_authors_array(w, 1, 10)?;
-                gen.pop_indent();
-                Ok(())
-            }),
-        );
-
-        fields.insert(
-            "hash".to_string(),
-            Box::new(|gen, w| write!(w, "{}", gen::hex_string(&mut gen.rng, 64))),
-        );
-        fields.insert(
-            "version".to_string(),
-            Box::new(|gen, w| write!(w, "{}", gen::integer(&mut gen.rng, 1, 9))),
-        );
-        fields.insert(
-            "home".to_string(),
-            Box::new(|gen, w| write!(w, "{}", gen::url(&mut gen.rng, "https", 0, 1, 0, 0, None))),
-        );
-        fields.insert(
-            "repository".to_string(),
-            Box::new(|gen, w| write!(w, "{}", gen::url(&mut gen.rng, "git", 1, 4, 10, 20, None))),
-        );
-        fields.insert(
-            "pdf".to_string(),
-            Box::new(|gen, w| {
-                write!(
-                    w,
-                    "{}",
-                    gen::url(&mut gen.rng, "https", 1, 4, 10, 30, Some("pdf"))
-                )
-            }),
-        );
+        let fields: Vec<(String, Box<GenFn<W>>)> = vec![
+            (
+                "description".to_string(),
+                Box::new(|gen, w| {
+                    write!(w, "|")?;
+                    gen.push_indent(2);
+                    gen.nl(w)?;
+                    let indent = gen.indent();
+                    let text = gen::text(&mut gen.rng, 1, 9, 3, 8, 10, 20, 80 - indent);
+                    gen.write_lines(w, &text)?;
+                    gen.pop_indent();
+                    Ok(())
+                }),
+            ),
+            (
+                "authors".to_string(),
+                Box::new(|gen, w| {
+                    gen.push_indent(2);
+                    gen.nl(w)?;
+                    gen.gen_authors_array(w, 1, 10)?;
+                    gen.pop_indent();
+                    Ok(())
+                }),
+            ),
+            (
+                "hash".to_string(),
+                Box::new(|gen, w| write!(w, "{}", gen::hex_string(&mut gen.rng, 64))),
+            ),
+            (
+                "version".to_string(),
+                Box::new(|gen, w| write!(w, "{}", gen::integer(&mut gen.rng, 1, 9))),
+            ),
+            (
+                "home".to_string(),
+                Box::new(|gen, w| {
+                    write!(w, "{}", gen::url(&mut gen.rng, "https", 0, 1, 0, 0, None))
+                }),
+            ),
+            (
+                "repository".to_string(),
+                Box::new(|gen, w| {
+                    write!(w, "{}", gen::url(&mut gen.rng, "git", 1, 4, 10, 20, None))
+                }),
+            ),
+            (
+                "pdf".to_string(),
+                Box::new(|gen, w| {
+                    write!(
+                        w,
+                        "{}",
+                        gen::url(&mut gen.rng, "https", 1, 4, 10, 30, Some("pdf"))
+                    )
+                }),
+            ),
+        ];
         self.gen_object(writer, fields)
     }
 
@@ -154,15 +159,16 @@ impl Generator {
 
     /// Generate a small object with 2 string fields.
     fn gen_author_object<W: std::io::Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        let mut fields = HashMap::<String, Box<GenFn<W>>>::new();
-        fields.insert(
-            "name".to_string(),
-            Box::new(|gen, w| write!(w, "{}", gen::full_name(&mut gen.rng, 10, 15))),
-        );
-        fields.insert(
-            "email".to_string(),
-            Box::new(|gen, w| write!(w, "{}", gen::email(&mut gen.rng, 1, 9))),
-        );
+        let fields: Vec<(String, Box<GenFn<W>>)> = vec![
+            (
+                "name".to_string(),
+                Box::new(|gen, w| write!(w, "{}", gen::full_name(&mut gen.rng, 10, 15))),
+            ),
+            (
+                "email".to_string(),
+                Box::new(|gen, w| write!(w, "{}", gen::email(&mut gen.rng, 1, 9))),
+            ),
+        ];
         self.gen_object(writer, fields)
     }
 
@@ -193,7 +199,7 @@ impl Generator {
     fn gen_object<W: std::io::Write>(
         &mut self,
         writer: &mut W,
-        fields: HashMap<String, Box<GenFn<W>>>,
+        fields: Vec<(String, Box<GenFn<W>>)>,
     ) -> std::io::Result<()> {
         let mut first = true;
         for (key, f) in fields {

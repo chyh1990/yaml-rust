@@ -12,7 +12,7 @@ edition = "2018"
 
 [dependencies]
 yaml-rust2 = { version = "0.7.0", path = "../../" }
-rand = "0.8.5"
+rand = { version = "0.8.5", features = [ "small_rng" ] }
 lipsum = "0.9.0"
 
 [profile.release-lto]

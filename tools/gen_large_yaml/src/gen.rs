@@ -1,15 +1,15 @@
 #![allow(clippy::too_many_arguments)]
 
-use rand::{distributions::Alphanumeric, rngs::ThreadRng, Rng};
+use rand::{distributions::Alphanumeric, rngs::SmallRng, Rng};
 
 /// Generate a string with hexadecimal digits of the specified length.
-pub fn hex_string(rng: &mut ThreadRng, len: usize) -> String {
+pub fn hex_string(rng: &mut SmallRng, len: usize) -> String {
     const DIGITS: &[u8] = b"0123456789abcdef";
     string_from_set(rng, len, len + 1, DIGITS)
 }
 
 /// Generate an e-mail address.
-pub fn email(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
+pub fn email(rng: &mut SmallRng, len_lo: usize, len_hi: usize) -> String {
     const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_.0123456789";
     format!(
         "{}@example.com",
@@ -19,7 +19,7 @@ pub fn email(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
 
 /// Generate a random URL.
 pub fn url(
-    rng: &mut ThreadRng,
+    rng: &mut SmallRng,
     scheme: &str,
     n_paths_lo: usize,
     n_paths_hi: usize,
@@ -40,12 +40,12 @@ pub fn url(
 }
 
 /// Generate a random integer.
-pub fn integer(rng: &mut ThreadRng, lo: i64, hi: i64) -> i64 {
+pub fn integer(rng: &mut SmallRng, lo: i64, hi: i64) -> i64 {
     rng.gen_range(lo..hi)
 }
 
 /// Generate an alphanumeric string with a length between `lo_len` and `hi_len`.
-pub fn alnum_string(rng: &mut ThreadRng, lo_len: usize, hi_len: usize) -> String {
+pub fn alnum_string(rng: &mut SmallRng, lo_len: usize, hi_len: usize) -> String {
     let len = rng.gen_range(lo_len..hi_len);
     rng.sample_iter(&Alphanumeric)
         .take(len)
@@ -54,7 +54,7 @@ pub fn alnum_string(rng: &mut ThreadRng, lo_len: usize, hi_len: usize) -> String
 }
 
 /// Generate a string with hexadecimal digits of the specified length.
-pub fn string_from_set(rng: &mut ThreadRng, len_lo: usize, len_hi: usize, set: &[u8]) -> String {
+pub fn string_from_set(rng: &mut SmallRng, len_lo: usize, len_hi: usize, set: &[u8]) -> String {
     (0..rng.gen_range(len_lo..len_hi))
         .map(|_| set[rng.gen_range(0..set.len())] as char)
         .collect()
@@ -62,7 +62,7 @@ pub fn string_from_set(rng: &mut ThreadRng, len_lo: usize, len_hi: usize, set: &
 
 /// Generate a lipsum paragraph.
 pub fn paragraph(
-    rng: &mut ThreadRng,
+    rng: &mut SmallRng,
     lines_lo: usize,
     lines_hi: usize,
     wps_lo: usize,
@@ -99,7 +99,7 @@ pub fn paragraph(
 }
 
 /// Generate a full name.
-pub fn full_name(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
+pub fn full_name(rng: &mut SmallRng, len_lo: usize, len_hi: usize) -> String {
     format!(
         "{} {}",
         name(rng, len_lo, len_hi),
@@ -108,7 +108,7 @@ pub fn full_name(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
 }
 
 /// Generate a name.
-pub fn name(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
+pub fn name(rng: &mut SmallRng, len_lo: usize, len_hi: usize) -> String {
     const UPPER: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const LOWER: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 
@@ -121,7 +121,7 @@ pub fn name(rng: &mut ThreadRng, len_lo: usize, len_hi: usize) -> String {
 }
 
 /// Generate a set of words.
-pub fn words(rng: &mut ThreadRng, words_lo: usize, words_hi: usize) -> String {
+pub fn words(rng: &mut SmallRng, words_lo: usize, words_hi: usize) -> String {
     let nwords = rng.gen_range(words_lo..words_hi);
     lipsum::lipsum_words_with_rng(rng.clone(), nwords).replace(|c| "-\'\",*:".contains(c), "")
 }
@@ -130,7 +130,7 @@ pub fn words(rng: &mut ThreadRng, words_lo: usize, words_hi: usize) -> String {
 ///
 /// Texts are composed of some paragraphs and empty lines between them.
 pub fn text(
-    rng: &mut ThreadRng,
+    rng: &mut SmallRng,
     paragraphs_lo: usize,
     paragraphs_hi: usize,
     lines_lo: usize,

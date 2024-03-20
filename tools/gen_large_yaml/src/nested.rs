@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use rand::{rngs::ThreadRng, Rng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 /// Create a deep object with the given amount of nodes.
 pub fn create_deep_object<W: std::io::Write>(
@@ -24,7 +24,10 @@ struct Tree {
     /// Array of all the nodes in the tree, including the root node.
     nodes: Vec<Rc<RefCell<Node>>>,
     /// The RNG state.
-    rng: ThreadRng,
+    ///
+    /// We don't need to be cryptographically secure. [`SmallRng`] also implements the
+    /// [`SeedableRng`] trait, allowing runs to be predictible.
+    rng: SmallRng,
 }
 
 /// A node in a tree.
@@ -40,7 +43,7 @@ impl Tree {
         Tree {
             root: root.clone(),
             nodes: vec![root],
-            rng: rand::thread_rng(),
+            rng: SmallRng::seed_from_u64(42),
         }
     }
 
