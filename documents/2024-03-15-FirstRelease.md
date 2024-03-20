@@ -108,6 +108,18 @@ As for your code, you have one of two solutions:
 
 Whichever you decide is up to you.
 
+[Courtesy of davvid](https://github.com/chyh1990/yaml-rust/issues/160#issuecomment-2008931473), there is another
+solution. You can combine both approaches and tell `Cargo.toml` to add `yaml-rust2` and to create a `yaml_rust` alias
+for your code with the following:
+
+```diff
+-yaml-rust = "0.4.4"
++yaml-rust = { version = "0.6", package = "yaml-rust2" }
+```
+
+This allows you to switch to `yaml-rust2` while continuing to refer to `yaml_rust` in your code (e.g. use
+`yaml_rust::YamlLoader;` will continue to work so that no Rust code changes are required).
+
 #### What about API breakage?
 Most of what I have changed is in the implementation details. You might notice more documentation appearing on your LSP,
 but documentation isn't bound by the API. There is only one change I made that could lead to compile errors. It is
@@ -151,3 +163,5 @@ issue](https://github.com/Ethiraric/yaml-rust2/issues)!
 If however you wanted an OpenAPI linter, I'm afraid you're out of luck. Just as much as I'm out of time ;)
 
 -Ethiraric
+
+EDIT(20-03-2024): Add davvid's method of switching to `yaml-rust2` by creating a Cargo alias.
