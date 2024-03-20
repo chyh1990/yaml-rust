@@ -30,14 +30,7 @@
 //!
 //! ```
 
-#![warn(clippy::pedantic)]
-#![allow(
-    clippy::match_same_arms,
-    clippy::should_implement_trait,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::redundant_else
-)]
+#![warn(missing_docs, clippy::pedantic)]
 
 extern crate hashlink;
 

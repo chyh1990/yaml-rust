@@ -1,3 +1,9 @@
+//! Home to the YAML Parser.
+//!
+//! The parser takes input from the [`crate::scanner::Scanner`], performs final checks for YAML
+//! compliance, and emits a stream of tokens that can be used by the [`crate::YamlLoader`] to
+//! construct the [`crate::Yaml`] object.
+
 use crate::scanner::{Marker, ScanError, Scanner, TScalarStyle, Token, TokenType};
 use std::collections::HashMap;
 
@@ -53,19 +59,23 @@ pub enum Event {
     ),
     /// Value, style, anchor_id, tag
     Scalar(String, TScalarStyle, usize, Option<Tag>),
+    /// The start of a YAML sequence (array).
     SequenceStart(
         /// The anchor ID of the start of the squence.
         usize,
         /// An optional tag
         Option<Tag>,
     ),
+    /// The end of a YAML sequence (array).
     SequenceEnd,
+    /// The start of a YAML mapping (object, hash).
     MappingStart(
         /// The anchor ID of the start of the mapping.
         usize,
         /// An optional tag
         Option<Tag>,
     ),
+    /// The end of a YAML mapping (object, hash).
     MappingEnd,
 }
 
@@ -195,6 +205,7 @@ impl<R: EventReceiver> MarkedEventReceiver for R {
     }
 }
 
+/// A convenience alias for a `Result` of a parser event.
 pub type ParseResult = Result<(Event, Marker), ScanError>;
 
 impl<T: Iterator<Item = char>> Parser<T> {

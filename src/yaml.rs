@@ -1,3 +1,5 @@
+//! YAML objects manipulation utilities.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{collections::BTreeMap, convert::TryFrom, mem, ops::Index};
@@ -50,7 +52,9 @@ pub enum Yaml {
     BadValue,
 }
 
+/// The type contained in the `Yaml::Array` variant. This corresponds to YAML sequences.
 pub type Array = Vec<Yaml>;
+/// The type contained in the `Yaml::Hash` variant. This corresponds to YAML mappings.
 pub type Hash = LinkedHashMap<Yaml, Yaml>;
 
 // parse f64 as Core schema
@@ -69,6 +73,7 @@ fn parse_f64(v: &str) -> Option<f64> {
 /// See [`YamlLoader::load_from_str`].
 #[derive(Default)]
 pub struct YamlLoader {
+    /// The different YAML documents that are loaded.
     docs: Vec<Yaml>,
     // states
     // (current node, anchor_id) tuple
@@ -161,10 +166,14 @@ impl MarkedEventReceiver for YamlLoader {
     }
 }
 
+/// An error that happened when loading a YAML document.
 #[derive(Debug)]
 pub enum LoadError {
+    /// An I/O error.
     IO(std::io::Error),
+    /// An error within the scanner. This indicates a malformed YAML input.
     Scan(ScanError),
+    /// A decoding error (e.g.: Invalid UTF_8).
     Decode(std::borrow::Cow<'static, str>),
 }
 
@@ -251,6 +260,7 @@ pub struct YamlDecoder<T: std::io::Read> {
 }
 
 impl<T: std::io::Read> YamlDecoder<T> {
+    /// Create a `YamlDecoder` decoding the given source.
     pub fn read(source: T) -> YamlDecoder<T> {
         YamlDecoder {
             source,
@@ -258,11 +268,14 @@ impl<T: std::io::Read> YamlDecoder<T> {
         }
     }
 
+    /// Set the behavior of the decoder when the encoding is invalid.
     pub fn encoding_trap(&mut self, trap: encoding::types::DecoderTrap) -> &mut Self {
         self.trap = trap;
         self
     }
 
+    /// Run the decode operation with the source and trap the `YamlDecoder` was built with.
+    ///
     /// # Errors
     /// Returns `LoadError` when decoding fails.
     pub fn decode(&mut self) -> Result<Vec<Yaml>, LoadError> {
@@ -301,6 +314,11 @@ fn detect_utf16_endianness(b: &[u8]) -> encoding::types::EncodingRef {
 
 macro_rules! define_as (
     ($name:ident, $t:ident, $yt:ident) => (
+/// Get a copy of the inner object in the YAML enum if it is a `$t`.
+///
+/// # Return
+/// If the variant of `self` is `Yaml::$yt`, return `Some($t)` with a copy of the `$t` contained.
+/// Otherwise, return `None`.
 #[must_use]
 pub fn $name(&self) -> Option<$t> {
     match *self {
@@ -313,6 +331,11 @@ pub fn $name(&self) -> Option<$t> {
 
 macro_rules! define_as_ref (
     ($name:ident, $t:ty, $yt:ident) => (
+/// Get a reference to the inner object in the YAML enum if it is a `$t`.
+///
+/// # Return
+/// If the variant of `self` is `Yaml::$yt`, return `Some(&$t)` with the `$t` contained. Otherwise,
+/// return `None`.
 #[must_use]
 pub fn $name(&self) -> Option<$t> {
     match *self {
@@ -325,6 +348,11 @@ pub fn $name(&self) -> Option<$t> {
 
 macro_rules! define_into (
     ($name:ident, $t:ty, $yt:ident) => (
+/// Get the inner object in the YAML enum if it is a `$t`.
+///
+/// # Return
+/// If the variant of `self` is `Yaml::$yt`, return `Some($t)` with the `$t` contained. Otherwise,
+/// return `None`.
 #[must_use]
 pub fn $name(self) -> Option<$t> {
     match self {

@@ -1,13 +1,16 @@
+//! YAML serialization helpers.
+
 use crate::char_traits;
 use crate::yaml::{Hash, Yaml};
 use std::convert::From;
 use std::error::Error;
 use std::fmt::{self, Display};
 
+/// An error when emitting YAML.
 #[derive(Copy, Clone, Debug)]
 pub enum EmitError {
+    /// A formatting error.
     FmtError(fmt::Error),
-    BadHashmapKey,
 }
 
 impl Error for EmitError {
@@ -20,7 +23,6 @@ impl Display for EmitError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             EmitError::FmtError(ref err) => Display::fmt(err, formatter),
-            EmitError::BadHashmapKey => formatter.write_str("bad hashmap key"),
         }
     }
 }
@@ -31,6 +33,20 @@ impl From<fmt::Error> for EmitError {
     }
 }
 
+/// The YAML serializer.
+///
+/// ```
+/// # use yaml_rust2::{YamlLoader, YamlEmitter};
+/// let input_string = "a: b\nc: d";
+/// let yaml = YamlLoader::load_from_str(input_string).unwrap();
+///
+/// let mut output = String::new();
+/// YamlEmitter::new(&mut output).dump(&yaml[0]).unwrap();
+///
+/// assert_eq!(output, r#"---
+/// a: b
+/// c: d"#);
+/// ```
 #[allow(clippy::module_name_repetitions)]
 pub struct YamlEmitter<'a> {
     writer: &'a mut dyn fmt::Write,
@@ -40,6 +56,7 @@ pub struct YamlEmitter<'a> {
     multiline_strings: bool,
 }
 
+/// A convenience alias for emitter functions that may fail without returning a value.
 pub type EmitResult = Result<(), EmitError>;
 
 // from serialize::json
@@ -106,6 +123,7 @@ fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
 }
 
 impl<'a> YamlEmitter<'a> {
+    /// Create a nwe emitter serializing into `writer`.
     pub fn new(writer: &'a mut dyn fmt::Write) -> YamlEmitter {
         YamlEmitter {
             writer,

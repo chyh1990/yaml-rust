@@ -163,7 +163,6 @@ impl EventReceiver for EventReporter {
                     TScalarStyle::DoubleQuoted => r#"""#,
                     TScalarStyle::Literal => "|",
                     TScalarStyle::Folded => ">",
-                    TScalarStyle::Any => unreachable!(),
                 };
                 format!(
                     "=VAL{}{} {}{}",

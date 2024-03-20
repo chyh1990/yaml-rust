@@ -1,3 +1,11 @@
+//! Home to the YAML Scanner.
+//!
+//! The scanner is the lowest-level parsing utility. It is the lexer / tokenizer, reading input a
+//! character at a time and emitting tokens that can later be interpreted by the [`crate::parser`]
+//! to check for more context and validity.
+//!
+//! Due to the grammar of YAML, the scanner has to have some context and is not error-free.
+
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
@@ -10,19 +18,26 @@ use crate::char_traits::{
     is_flow, is_hex, is_tag_char, is_uri_char, is_z,
 };
 
+/// The encoding of the input. Currently, only UTF-8 is supported.
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TEncoding {
+    /// UTF-8 encoding.
     Utf8,
 }
 
+/// The style as which the scalar was written in the YAML document.
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TScalarStyle {
-    Any,
+    /// A YAML plain scalar.
     Plain,
+    /// A YAML single quoted scalar.
     SingleQuoted,
+    /// A YAML double quoted scalar.
     DoubleQuoted,
 
+    /// A YAML literal block (`|` block).
     Literal,
+    /// A YAML folded block (`>` block).
     Folded,
 }
 
@@ -120,17 +135,18 @@ impl fmt::Display for ScanError {
 /// The contents of a scanner token.
 #[derive(Clone, PartialEq, Debug, Eq)]
 pub enum TokenType {
-    NoToken,
     /// The start of the stream. Sent first, before even [`DocumentStart`].
     StreamStart(TEncoding),
     /// The end of the stream, EOF.
     StreamEnd,
+    /// A YAML version directive.
     VersionDirective(
         /// Major
         u32,
         /// Minor
         u32,
     ),
+    /// A YAML tag directive (e.g.: `!!str`, `!foo!bar`, ...).
     TagDirective(
         /// Handle
         String,
@@ -394,6 +410,7 @@ impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
     }
 }
 
+/// A convenience alias for scanner functions that may fail without returning a value.
 pub type ScanResult = Result<(), ScanError>;
 
 impl<T: Iterator<Item = char>> Scanner<T> {
@@ -532,16 +549,19 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.buffer[0] == c
     }
 
+    /// Return whether the [`TokenType::StreamStart`] event has been emitted.
     #[inline]
     pub fn stream_started(&self) -> bool {
         self.stream_start_produced
     }
 
+    /// Return whether the [`TokenType::StreamEnd`] event has been emitted.
     #[inline]
     pub fn stream_ended(&self) -> bool {
         self.stream_end_produced
     }
 
+    /// Get the current position in the input stream.
     #[inline]
     pub fn mark(&self) -> Marker {
         self.mark
