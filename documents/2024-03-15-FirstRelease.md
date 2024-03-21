@@ -79,7 +79,7 @@ This release should improve over `yaml-rust` over 3 major points:
   * Performance: We all love fast software. I want to help you achieve it. I haven't managed to make this crate twice as
     fast, but you should notice a 15-20% improvement in performance.
   * Compliance: You may not notice it, since I didn't know most of the bugs I fixed were bugs to begin with, but this
-    crate should now be fully YAML-comliant.
+    crate should now be fully YAML-compliant.
   * Documentation: The documentation of `yaml-rust` is unfortunately incomplete. Documentation here is not exhaustive,
     but most items are documented. Notably, private items are documented, making it much easier to understand where
     something happens. There are also in-code comments that help figure out what is going on under the hood.
