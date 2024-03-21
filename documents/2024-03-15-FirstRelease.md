@@ -153,7 +153,7 @@ Work on this crate is far from over. I will try and match `libfyaml`'s performan
 against it, and I wouldn't have guessed it to outperform `yaml-rust2` that much.
 
 If you're interested in upgrading your `yaml-rust` crate, please do take a look at [davvid](https://github.com/davvid)'s
-[fork of `yaml-rust`](https://github.com/davvid/yaml-rust). Very recent developements on this crate sparked from an
+[fork of `yaml-rust`](https://github.com/davvid/yaml-rust). Very recent developments on this crate sparked from an
 [issue on advisory-db](https://github.com/rustsec/advisory-db/issues/1921) about the unmaintained state of `yaml-rust`.
 I hope it will be that YAML in Rust will improve following this issue.
 
