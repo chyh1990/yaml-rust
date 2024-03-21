@@ -55,7 +55,7 @@ Here is in the end the performance breakdown:
 ![Comparison of the performance between `yaml-rust`, `yaml-rust2` and the C `libfyaml`. `yaml-rust2` is faster in every
 test than `yaml-rust`, but `libfyaml` remains faster overall.](./img/benchmarks-v0.6.svg)
 
-Here is a shot description of what the files contain:
+Here is a short description of what the files contain:
 
   * `big`: A large array of records with few fields. One of the fields is a description, a large text block scalar
     spanning multiple lines. Most of the scanning happens in block scalars.
