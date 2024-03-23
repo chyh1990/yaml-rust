@@ -1,5 +1,27 @@
 # Changelog
 
+## Upcoming
+### Breaking changes
+ - The `encoding` library has been replaced with `encoding_rs`. If you use the
+   `trap` of `YamlDecoder`, this change will make your code not compile.
+   An additional enum `YamlDecoderTrap` has been added to abstract the
+   underlying library and avoid breaking changes in the future. This
+   additionally lifts the `encoding` dependency on _your_ project if you were
+   using that feature.
+   - The `encoding::types::DecoderTrap` has been replaced with `YamlDecoderTrap`.
+   - The signature of the function for `YamlDecoderTrap::Call` has changed:
+     ```rs
+     // Before, with `encoding::types::DecoderTrap::Call`
+     fn(_: &mut encoding::RawDecoder, _: &[u8], _: &mut encoding::StringWriter) -> bool;
+     // Now, with `YamlDecoderTrap::Call`
+     fn(_: u8, _: u8, _: &[u8], _: &mut String) -> ControlFlow<Cow<'static str>>;
+     ```
+     Please refer to the `YamlDecoderTrapFn` documentation for more details.
+
+**Features**:
+
+**Development**:
+
 ## v0.7.0
 
 **Features**:
