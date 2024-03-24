@@ -228,7 +228,28 @@ impl<T: Iterator<Item = char>> Parser<T> {
         }
     }
 
-    /// Make tags persistent when parsing multiple documents.
+    /// Whether to keep tags across multiple documents when parsing.
+    ///
+    /// This behavior is non-standard as per the YAML specification but can be encountered in the
+    /// wild. This boolean allows enabling this non-standard extension. This would result in the
+    /// parser accepting input from [test
+    /// QLJ7](https://github.com/yaml/yaml-test-suite/blob/ccfa74e56afb53da960847ff6e6976c0a0825709/src/QLJ7.yaml)
+    /// of the yaml-test-suite:
+    ///
+    /// ```yaml
+    /// %TAG !prefix! tag:example.com,2011:
+    /// --- !prefix!A
+    /// a: b
+    /// --- !prefix!B
+    /// c: d
+    /// --- !prefix!C
+    /// e: f
+    /// ```
+    ///
+    /// With `keep_tags` set to `false`, the above YAML is rejected. As per the specification, tags
+    /// only apply to the document immediately following them. This would error on `!prefix!B`.
+    ///
+    /// With `keep_tags` set to `true`, the above YAML is accepted by the parser.
     #[must_use]
     pub fn keep_tags(mut self, value: bool) -> Self {
         self.keep_tags = value;
