@@ -239,6 +239,12 @@ impl YamlLoader {
         parser.load(&mut loader, true)?;
         Ok(loader.docs)
     }
+
+    /// Return a reference to the parsed Yaml documents.
+    #[must_use]
+    pub fn documents(&self) -> &[Yaml] {
+        &self.docs
+    }
 }
 
 /// The signature of the function to call when using [`YAMLDecodingTrap::Call`].
