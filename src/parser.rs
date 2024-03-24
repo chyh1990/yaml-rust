@@ -115,6 +115,8 @@ pub struct Parser<T> {
     ///
     /// Key is the handle, and value is the prefix.
     tags: HashMap<String, String>,
+    /// Make tags global across all documents.
+    keep_tags: bool,
 }
 
 /// Trait to be implemented in order to use the low-level parsing API.
@@ -222,7 +224,15 @@ impl<T: Iterator<Item = char>> Parser<T> {
             // valid anchor_id starts from 1
             anchor_id: 1,
             tags: HashMap::new(),
+            keep_tags: false,
         }
+    }
+
+    /// Make tags persistent when parsing multiple documents.
+    #[must_use]
+    pub fn keep_tags(mut self, value: bool) -> Self {
+        self.keep_tags = value;
+        self
     }
 
     /// Try to load the next event and return it, but do not consuming it from `self`.
@@ -595,7 +605,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
             Token(mark, _) => mark,
         };
 
-        self.tags.clear();
+        if !self.keep_tags {
+            self.tags.clear();
+        }
         if explicit_end {
             self.state = State::ImplicitDocumentStart;
         } else {
@@ -1050,6 +1062,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
 #[cfg(test)]
 mod test {
     use super::{Event, Parser};
+    use crate::YamlLoader;
 
     #[test]
     fn test_peek_eq_parse() {
@@ -1072,5 +1085,25 @@ a5: *x
             assert_eq!(event, event_peek);
             event.0 != Event::StreamEnd
         } {}
+    }
+
+    #[test]
+    fn test_keep_tags_across_multiple_documents() {
+        let text = r#"
+%YAML 1.1
+%TAG !t! tag:test,2024:
+--- !t!1 &1
+foo: "bar"
+--- !t!2 &2
+baz: "qux"
+"#;
+        let mut loader = YamlLoader::default();
+        let mut parser = Parser::new(text.chars()).keep_tags(true);
+        assert!(parser.load(&mut loader, true).is_ok());
+        assert_eq!(loader.documents().len(), 2);
+        let yaml = &loader.documents()[0];
+        assert_eq!(yaml["foo"].as_str(), Some("bar"));
+        let yaml = &loader.documents()[1];
+        assert_eq!(yaml["baz"].as_str(), Some("qux"));
     }
 }
