@@ -20,6 +20,11 @@
 
 **Features**:
 
+- Tags can now be retained across documents by calling `keep_tags(true)` on a
+  `yaml_rust2::Parser` before loading documents.
+  ([#10](https://github.com/Ethiraric/yaml-rust2/issues/10)
+  ([#12](https://github.com/Ethiraric/yaml-rust2/pull/12))
+
 **Development**:
 
 ## v0.7.0
