@@ -17,7 +17,7 @@ impl MarkedEventReceiver for NullSink {
 /// Parse the given input, returning elapsed time in nanoseconds.
 fn do_parse(input: &str) -> u64 {
     let mut sink = NullSink {};
-    let mut parser = Parser::new(input.chars());
+    let mut parser = Parser::new_from_str(input);
     let begin = std::time::Instant::now();
     parser.load(&mut sink, true).unwrap();
     let end = std::time::Instant::now();

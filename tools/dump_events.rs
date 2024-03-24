@@ -21,7 +21,7 @@ impl MarkedEventReceiver for EventSink {
 
 fn str_to_events(yaml: &str) -> Vec<(Event, Marker)> {
     let mut sink = EventSink { events: Vec::new() };
-    let mut parser = Parser::new(yaml.chars());
+    let mut parser = Parser::new_from_str(yaml);
     // Load events using our sink as the receiver.
     parser.load(&mut sink, true).unwrap();
     sink.events

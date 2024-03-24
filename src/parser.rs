@@ -182,7 +182,7 @@ pub struct Parser<T> {
 /// /// Load events from a yaml string.
 /// fn str_to_events(yaml: &str) -> Vec<Event> {
 ///     let mut sink = EventSink { events: Vec::new() };
-///     let mut parser = Parser::new(yaml.chars());
+///     let mut parser = Parser::new_from_str(yaml);
 ///     // Load events using our sink as the receiver.
 ///     parser.load(&mut sink, true).unwrap();
 ///     sink.events
@@ -210,8 +210,16 @@ impl<R: EventReceiver> MarkedEventReceiver for R {
 /// A convenience alias for a `Result` of a parser event.
 pub type ParseResult = Result<(Event, Marker), ScanError>;
 
+impl<'a> Parser<core::str::Chars<'a>> {
+    /// Create a new instance of a parser from a &str.
+    #[must_use]
+    pub fn new_from_str(value: &'a str) -> Self {
+        Parser::new(value.chars())
+    }
+}
+
 impl<T: Iterator<Item = char>> Parser<T> {
-    /// Crate a new instance of a parser from the given input of characters.
+    /// Create a new instance of a parser from the given input of characters.
     pub fn new(src: T) -> Parser<T> {
         Parser {
             scanner: Scanner::new(src),
@@ -1099,7 +1107,7 @@ a4:
     - 2
 a5: *x
 ";
-        let mut p = Parser::new(s.chars());
+        let mut p = Parser::new_from_str(s);
         while {
             let event_peek = p.peek().unwrap().clone();
             let event = p.next_token().unwrap();

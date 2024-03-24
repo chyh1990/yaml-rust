@@ -21,7 +21,7 @@ fn main() {
     f.read_to_string(&mut s).unwrap();
 
     let mut sink = NullSink {};
-    let mut parser = Parser::new(s.chars());
+    let mut parser = Parser::new_from_str(&s);
 
     // Load events using our sink as the receiver.
     let begin = std::time::Instant::now();
