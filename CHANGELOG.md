@@ -30,6 +30,8 @@ using that feature.
 - `YamlLoader` structs now have a `documents()` method that returns the parsed
 documents associated with a loader.
 
+- `Parser::new_from_str(&str)` and `YamlLoader::load_from_parser(&Parser)` were added.
+
 **Development**:
 
 ## v0.7.0

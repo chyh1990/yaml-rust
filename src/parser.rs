@@ -1126,13 +1126,14 @@ foo: "bar"
 --- !t!2 &2
 baz: "qux"
 "#;
-        let mut loader = YamlLoader::default();
-        let mut parser = Parser::new(text.chars()).keep_tags(true);
-        assert!(parser.load(&mut loader, true).is_ok());
-        assert_eq!(loader.documents().len(), 2);
-        let yaml = &loader.documents()[0];
+        let mut parser = Parser::new_from_str(text).keep_tags(true);
+        let result = YamlLoader::load_from_parser(&mut parser);
+        assert!(result.is_ok());
+        let docs = result.unwrap();
+        assert_eq!(docs.len(), 2);
+        let yaml = &docs[0];
         assert_eq!(yaml["foo"].as_str(), Some("bar"));
-        let yaml = &loader.documents()[1];
+        let yaml = &docs[1];
         assert_eq!(yaml["baz"].as_str(), Some("qux"));
 
         let mut loader = YamlLoader::default()

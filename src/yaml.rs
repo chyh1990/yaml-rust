@@ -234,8 +234,20 @@ impl YamlLoader {
     /// # Errors
     /// Returns `ScanError` when loading fails.
     pub fn load_from_iter<I: Iterator<Item = char>>(source: I) -> Result<Vec<Yaml>, ScanError> {
-        let mut loader = YamlLoader::default();
         let mut parser = Parser::new(source);
+        Self::load_from_parser(&mut parser)
+    }
+
+    /// Load the contents from the specified Parser as a set of YAML documents.
+    ///
+    /// Parsing succeeds if and only if all documents are parsed successfully.
+    /// An error in a latter document prevents the former from being returned.
+    /// # Errors
+    /// Returns `ScanError` when loading fails.
+    pub fn load_from_parser<I: Iterator<Item = char>>(
+        parser: &mut Parser<I>,
+    ) -> Result<Vec<Yaml>, ScanError> {
+        let mut loader = YamlLoader::default();
         parser.load(&mut loader, true)?;
         Ok(loader.docs)
     }
